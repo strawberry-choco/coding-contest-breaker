@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""Oracle/checker for this level.
+
+Usage:
+    python3 checker.py <input_file> <output_file> [expected_output_file]
+
+Exit code 0 = the candidate output is ACCEPTABLE; non-zero = rejected, with a
+one-line reason on stdout (or stderr).
+
+Phase 2 rules:
+  * For kind=exact, the default comparison (token-wise) is usually enough.
+  * For kind=any_valid, implement every constraint from the statement in
+    ``validate``. It does NOT have to match a reference answer.
+  * The checker MUST accept every provided sample answer. Test that first.
+  * Add a deliberately invalid answer and make sure this rejects it.
+"""
+from __future__ import annotations
+
+import sys
+
+
+def parse_input(text: str):
+    """Parse the input into whatever the validation needs."""
+    # TODO: implement per the statement.
+    return text
+
+
+def validate(problem, answer: str, expected: str | None) -> tuple[bool, str]:
+    """Return (ok, reason). Replace the body for your level's constraints."""
+    if expected is not None:
+        # Exact fallback: token-wise comparison ignoring whitespace runs.
+        a = answer.split()
+        b = expected.split()
+        if a != b:
+            for i in range(max(len(a), len(b))):
+                av = a[i] if i < len(a) else "<missing>"
+                bv = b[i] if i < len(b) else "<missing>"
+                if av != bv:
+                    return False, f"first token diff #{i + 1}: got {av!r}, expected {bv!r}"
+        return True, "token match"
+
+    # TODO (any_valid): check well-formedness and every stated constraint.
+    # Example shape:
+    #   lines = answer.strip().split("\n")
+    #   if len(lines) != expected_count: return False, "wrong number of lines"
+    #   ... validate ranges, adjacency, uniqueness, objective bounds ...
+    return True, "accepted (no constraints implemented yet)"
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) < 3:
+        print("usage: checker.py <input> <output> [expected]", file=sys.stderr)
+        return 2
+    inp = open(argv[1], encoding="utf-8").read()
+    out = open(argv[2], encoding="utf-8").read()
+    expected = open(argv[3], encoding="utf-8").read() if len(argv) > 3 and argv[3] else None
+    ok, reason = validate(parse_input(inp), out, expected)
+    print(("ACCEPT: " if ok else "REJECT: ") + reason)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

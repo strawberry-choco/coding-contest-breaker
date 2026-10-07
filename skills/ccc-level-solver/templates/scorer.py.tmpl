@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Scorer for an optimization level.
+
+Usage:
+    python3 scorer.py <input_file> <output_file>
+
+Prints a single number (the metric) on stdout and exits 0 if the answer is
+VALID; exits non-zero (and prints nothing on stdout) if the answer is invalid.
+
+Record the metric direction in level.json:
+    judge.direction = "min"  (smaller is better)  or  "max"
+    judge.metric    = "total_cost"
+
+Phase 2 rules:
+  * Validate BEFORE scoring, always. Never score an invalid answer.
+  * Deterministic: same (input, output) -> same score.
+  * The scorer must accept the provided sample answer and yield the recorded
+    baseline; a strictly better construction must score strictly better.
+"""
+from __future__ import annotations
+
+import sys
+
+
+def parse_input(text: str):
+    # TODO: parse the input into the model the validator/scorer needs.
+    return text
+
+
+def validate(problem, answer: str) -> tuple[bool, str]:
+    """Return (ok, reason). MUST reject any answer violating the constraints."""
+    # TODO: implement validity checks (feasibility, format, limits).
+    return True, "valid"
+
+
+def score(problem, answer: str) -> float:
+    """Return the metric value. Only called when the answer is valid."""
+    # TODO: implement the objective. Example: total cost, path length, size.
+    return 0.0
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) < 3:
+        print("usage: scorer.py <input> <output>", file=sys.stderr)
+        return 2
+    problem = parse_input(open(argv[1], encoding="utf-8").read())
+    answer = open(argv[2], encoding="utf-8").read()
+
+    ok, reason = validate(problem, answer)
+    if not ok:
+        print(f"invalid: {reason}", file=sys.stderr)
+        return 1
+
+    print(f"{score(problem, answer):.10g}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

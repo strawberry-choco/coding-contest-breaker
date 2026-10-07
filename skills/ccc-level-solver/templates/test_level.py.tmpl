@@ -1,0 +1,110 @@
+"""TDD tests for this level (Phase 2/3).
+
+These run in RED before the solver is finished and GREEN afterwards. Extend with
+regression tests for every edge case / bug you find. Run with:  pytest -q
+"""
+from __future__ import annotations
+
+import importlib.util
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+LEVEL = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(LEVEL))
+
+CFG = json.loads((LEVEL / "level.json").read_text(encoding="utf-8")) \
+    if (LEVEL / "level.json").exists() else {}
+KIND = CFG.get("kind", "exact")
+
+
+def _load_solver():
+    spec = importlib.util.spec_from_file_location("solver", LEVEL / "solver.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _samples():
+    d = LEVEL / "samples"
+    if not d.is_dir():
+        return []
+    pairs = []
+    for inp in sorted(d.glob("*.in")):
+        out = inp.with_suffix(".out")
+        if out.exists():
+            pairs.append((inp, out))
+    return pairs
+
+
+def test_samples_pass_oracle():
+    """The solver's output for each sample must pass the oracle."""
+    solver = _load_solver()
+    pairs = _samples()
+    assert pairs, "no samples found in samples/*.in + *.out"
+
+    checker = LEVEL / "checker.py"
+    failures = []
+    for inp, expected in pairs:
+        answer = solver.solve(inp.read_text(encoding="utf-8"))
+        if not answer.endswith("\n"):
+            answer += "\n"
+        cand = LEVEL / "outputs" / f"__test_{inp.stem}.out"
+        cand.parent.mkdir(parents=True, exist_ok=True)
+        cand.write_text(answer, encoding="utf-8")
+
+        if checker.exists():
+            rc = subprocess.run(
+                [sys.executable, str(checker), str(inp), str(cand), str(expected)],
+                capture_output=True, text=True,
+            )
+            ok = rc.returncode == 0
+            detail = (rc.stdout or rc.stderr).strip()
+        else:
+            ok = answer.split() == expected.read_text(encoding="utf-8").split()
+            detail = "token comparison"
+        if not ok:
+            failures.append(f"{inp.name}: {detail}")
+    assert not failures, "samples failed:\n" + "\n".join(failures)
+
+
+def test_optimization_beats_or_ties_baseline():
+    """For optimization levels, the solver must not be worse than the baseline."""
+    if KIND != "optimization":
+        return  # not applicable
+    scorer = LEVEL / "scorer.py"
+    assert scorer.exists(), "optimization level needs scorer.py"
+    baseline = (CFG.get("judge") or {}).get("best")
+    direction = (CFG.get("judge") or {}).get("direction", "min")
+
+    solver = _load_solver()
+    for inp, expected in _samples():
+        answer = solver.solve(inp.read_text(encoding="utf-8"))
+        cand = LEVEL / "outputs" / f"__test_{inp.stem}.out"
+        cand.parent.mkdir(parents=True, exist_ok=True)
+        cand.write_text(answer, encoding="utf-8")
+        res = subprocess.run(
+            [sys.executable, str(scorer), str(inp), str(cand)],
+            capture_output=True, text=True,
+        )
+        assert res.returncode == 0, f"scorer rejected {inp.name}: {res.stderr}"
+        got = float(res.stdout.strip().split()[0])
+        base = subprocess.run(
+            [sys.executable, str(scorer), str(inp), str(expected)],
+            capture_output=True, text=True,
+        )
+        base_score = float(base.stdout.strip().split()[0])
+        if direction == "min":
+            assert got <= base_score, f"{inp.name}: got {got} > baseline {base_score}"
+        else:
+            assert got >= base_score, f"{inp.name}: got {got} < baseline {base_score}"
+
+
+# ---------------------------------------------------------------------------
+# Add your own regression tests below, e.g.:
+#
+# def test_single_element_input():
+#     solver = _load_solver()
+#     assert solver.solve("1\n").split() == ["1"]
+# ---------------------------------------------------------------------------

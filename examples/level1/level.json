@@ -1,0 +1,15 @@
+{
+  "kind": "exact",
+  "run": ["python3", "solver.py", "{in}", "{out}"],
+  "inputs": "inputs",
+  "outputs": "outputs",
+  "samples": "samples",
+  "judge": {
+    "command": null,
+    "compare": "tokens",
+    "direction": "min",
+    "metric": "sum",
+    "best": null
+  },
+  "notes": "Worked example: sum of N integers."
+}
