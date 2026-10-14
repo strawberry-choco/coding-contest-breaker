@@ -52,6 +52,20 @@ to normalize it into the shape above first.
 Follow the phases in order. Do not skip Phase 0 or Phase 2 — they are what make
 this reliable instead of guess-driven.
 
+**Every level is a fresh contract.** A CCC level builds on the previous level's
+model but **adds or removes rules**, so nothing carries over for free: re-read the
+statement, re-derive the oracle, and re-check every assumption. Deliberately ignore
+backward compatibility with the previous level — its rules, tests, inputs, and
+solver behavior are *not* a baseline you must preserve, and reusing them unchanged
+is more likely to be wrong than right.
+
+**Every level is a fresh contract.** A CCC level builds on the previous level's
+model but **adds or removes rules**, so nothing carries over for free: re-read the
+statement, re-derive the oracle, and re-check every assumption. Deliberately ignore
+backward compatibility with the previous level — its rules, tests, inputs, and
+solver behavior are *not* a baseline you must preserve, and reusing them unchanged
+is more likely to be wrong than right.
+
 ### Phase 0 — Identify the level kind
 
 **Goal:** decide *how the level is judged*, because everything downstream
@@ -110,7 +124,9 @@ is wired to tests, *before* any solver is written.
 - Write `tests/test_level.py` (start from `templates/test_level.py.tmpl`):
   - samples pass the oracle,
   - the solver (once written) reproduces sample answers or beats the baseline,
-  - regression tests for every bug you fix (so it never comes back).
+  - regression tests for every bug you fix, scoped to **this level** (so it never
+    comes back *here*); do not carry them across levels — a later level may add or
+    remove rules, making last level's tests invalid (see `references/tdd-workflow.md`).
 - Run the tests and **watch them fail** — that is the RED state.
 
 ### Phase 3 — Implement a baseline solver (GREEN)
@@ -213,3 +229,9 @@ copy the relevant ones into the level directory and fill them in.
 - **Discarding a better answer.** In `optimization`, never overwrite a valid,
   better incumbent with a worse one.
 - **Assuming "correct" means "identical".** Many levels accept *any* valid answer.
+- **Preserving the previous level.** Do not carry a prior level's rules, oracle,
+  tests, or solver forward unchanged. A later level adds or removes rules, so treat
+  it as a new contract; backward compatibility is explicitly not a goal.
+- **Preserving the previous level.** Do not carry a prior level's rules, oracle,
+  tests, or solver forward unchanged. A later level adds or removes rules, so treat
+  it as a new contract; backward compatibility is explicitly not a goal.

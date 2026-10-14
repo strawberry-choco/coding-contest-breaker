@@ -9,8 +9,11 @@ judged, and the formatting pitfalls that lose points.
   (outputs). This is **output-only**: you upload answers, not source code.
   (You may also upload source later for bonus time, but that is not how the level
   is judged.)
-- Levels are **gated and sequential**: you cannot skip ahead. Harder levels
-  usually extend the previous level's model with more constraints.
+- Levels are **gated and sequential**: you cannot skip ahead. A later level
+  starts from the previous level's model but **adds or removes rules** — so treat
+  each level as a fresh contract and re-derive it from its own statement, rather
+  than assuming the previous level's rules, tests, or solver still apply.
+  Backward compatibility across levels is not a goal.
 - All languages are allowed. You produce the answer files however you like —
   usually by writing a program that reads each input and writes an output.
 

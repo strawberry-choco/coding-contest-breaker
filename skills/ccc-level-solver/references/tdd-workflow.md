@@ -67,12 +67,19 @@ the solver as a subprocess over pipes. This is both oracle and test harness.
   the tests green. For optimization, wrap the loop from Phase 4 and re-run the
   scorer after every accepted improvement.
 
-## Regression discipline
+## Regression discipline (within one level only)
 
 Every time you fix a bug, add a test that reproduces it. Contest solvers fail on
 edge cases (size 1, maximal input, ties, ambiguous whitespace) — encode each one
-you discover. The test suite becomes your safety net for later levels that extend
-the same game.
+you discover **for the level you are currently solving**.
+
+Do **not** carry tests, rules, or assumptions across levels. A CCC level builds on
+the previous level's model but **adds or removes rules**, so a test that pinned the
+previous level's behavior may be wrong for this level — or assert something the new
+statement forbids. Backward compatibility across levels is explicitly *not* a goal:
+re-derive the oracle and tests from the current statement every time, and expect to
+delete or rewrite prior tests rather than keep them green. Earlier tests are not a
+safety net for later levels; they are a liability.
 
 ## When you may change the oracle
 
