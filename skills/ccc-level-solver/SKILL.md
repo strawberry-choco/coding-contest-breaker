@@ -190,6 +190,9 @@ green** — via the simplest thing that achieves it.
 - Start from `templates/solver.py.tmpl`. Keep the contract: read one input,
   write one answer, deterministic.
 - Prefer a correct-but-slow baseline first (brute force, DP, simulation).
+- **Smoke test after every solver edit**: solve the sample and run the checker
+  on it (seconds) before any longer run. It catches crashes, import errors,
+  and format breaks that otherwise surface mid-pipeline minutes later.
 - Loop: run `python3 skills/ccc-level-solver/scripts/run_solver.py
   "<level_dir>"`, then `python3 skills/ccc-level-solver/scripts/check_outputs.py
   "<level_dir>"`, then the tests. Fix until green.
