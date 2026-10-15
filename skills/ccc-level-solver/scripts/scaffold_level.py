@@ -9,8 +9,17 @@ Creates the standard workspace (inputs/, samples/, outputs/, tests/, notes/),
 writes a starter level.json, and copies solver/test templates if absent.
 
 With --import, a flat downloaded folder is normalized: an input file that has a
-sibling ``.out`` with the same base name becomes a sample pair (copied to
-samples/); everything else input-like is copied to inputs/.
+sibling answer file becomes a sample pair (moved to samples/); everything else
+input-like is moved to inputs/. Provided file names are kept verbatim — the
+platform's naming is the truth. Two pairing conventions are recognized:
+
+  * shared stem, paired suffixes:  X.in <-> X.out
+  * in_/out_ prefixes:             in_X.txt <-> out_X.txt   (School track)
+
+**It moves, it does not copy.** The documented flow passes the level dir as
+both arguments when the download already sits there flat, and copying would
+leave a second, silently drifting twin of every provided file at the level
+root next to the workspace copies. Moving keeps one copy of each file.
 
 Idempotent: existing files are left alone unless --force is given.
 """
@@ -29,10 +38,29 @@ OUTPUT_SUFFIXES = {".out", ".ans", ".answer"}
 
 
 def _maybe_copy(src: Path, dst: Path, force: bool) -> bool:
+    """Copy a template into the workspace (the source is the skill's own file)."""
     if dst.exists() and not force:
         return False
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
+    return True
+
+
+def _maybe_move(src: Path, dst: Path, force: bool) -> bool:
+    """Move a provided file into the workspace under its verbatim name.
+
+    Returns False when there is nothing to do: the file already sits at the
+    destination (the flat download was the level dir itself), or the
+    destination exists and --force was not given.
+    """
+    if src.resolve() == dst.resolve():
+        return False  # already in place
+    if dst.exists() and not force:
+        print(f"  left {src.name} in place: {dst} already exists "
+              f"(pass --force to overwrite it)")
+        return False
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dst))
     return True
 
 
@@ -63,37 +91,62 @@ def starter_level_json(kind: str) -> dict:
     return cfg
 
 
+def _pair_sibling(p: Path) -> Path | None:
+    """The answer file paired with an input (or vice versa), if one exists.
+
+    Convention 1: shared stem with a paired suffix (X.in <-> X.out).
+    Convention 2: in_/out_ prefixes with any suffix (in_X.txt <-> out_X.txt).
+    """
+    if p.suffix.lower() in INPUT_SUFFIXES:
+        for out_suffix in OUTPUT_SUFFIXES:
+            cand = p.with_suffix(out_suffix)
+            if cand.exists():
+                return cand
+    low = p.name.lower()
+    if low.startswith("in_"):
+        cand = p.with_name("out_" + p.name[3:])
+        if cand.exists():
+            return cand
+    if low.startswith("out_"):
+        cand = p.with_name("in_" + p.name[4:])
+        if cand.exists():
+            return cand
+    return None
+
+
 def import_flat(src: Path, level_dir: Path, force: bool) -> tuple[int, int]:
-    """Normalize a flat download folder. Returns (#inputs, #samples)."""
+    """Normalize a flat download folder, moving the files. Returns (#in, #samples)."""
     n_in = n_sample = 0
     candidates = [p for p in sorted(src.iterdir()) if p.is_file()
                   and not p.name.startswith(".")]
     for p in candidates:
+        if not p.exists():
+            continue  # moved already, together with its paired sibling
         suffix = p.suffix.lower()
-        if suffix in OUTPUT_SUFFIXES:
-            continue  # handled alongside its .in
+        if p.name.lower().startswith("out_"):
+            # An answer file is only meaningful next to its input, never an
+            # input itself; its pairing is handled when the input is seen.
+            if _pair_sibling(p) is None:
+                print(f"  skipped {p.name}: answer file with no matching input")
+            continue
         if suffix not in INPUT_SUFFIXES:
             # verifier-ish artifacts
             name = p.name.lower()
             if name.endswith((".html", ".js", ".py")) and (
                 "check" in name or "visual" in name or "verif" in name or "scor" in name
             ):
-                _maybe_copy(p, level_dir / "verifier" / p.name, force)
+                _maybe_move(p, level_dir / "verifier" / p.name, force)
             elif name.endswith((".md", ".pdf")) or name.startswith("statement"):
-                _maybe_copy(p, level_dir / p.name, force)
+                _maybe_move(p, level_dir / p.name, force)
             continue
-        sibling_out = None
-        for out_suffix in OUTPUT_SUFFIXES:
-            cand = p.with_suffix(out_suffix)
-            if cand.exists():
-                sibling_out = cand
-                break
-        if sibling_out is not None:
-            _maybe_copy(p, level_dir / "samples" / p.name, force)
-            _maybe_copy(sibling_out, level_dir / "samples" / sibling_out.name, force)
+        sibling = _pair_sibling(p)
+        if sibling is not None:
+            # Provided names are kept verbatim, in samples/ too.
+            _maybe_move(p, level_dir / "samples" / p.name, force)
+            _maybe_move(sibling, level_dir / "samples" / sibling.name, force)
             n_sample += 1
         else:
-            _maybe_copy(p, level_dir / "inputs" / p.name, force)
+            _maybe_move(p, level_dir / "inputs" / p.name, force)
             n_in += 1
     return n_in, n_sample
 
@@ -121,7 +174,8 @@ def main(argv: list[str] | None = None) -> int:
         if not src.is_dir():
             C.die(f"--import source is not a directory: {src}")
         n_in, n_sample = import_flat(src, level_dir, args.force)
-        print(f"imported {n_in} input(s), {n_sample} sample pair(s) from {src}")
+        print(f"imported {n_in} input(s), {n_sample} sample pair(s) from {src} "
+              f"(moved)")
 
     # level.json
     lj = C.level_json_path(level_dir)
@@ -145,7 +199,8 @@ def main(argv: list[str] | None = None) -> int:
         if src_t.exists() and _maybe_copy(src_t, dst, args.force):
             print(f"scaffolded {dst.relative_to(level_dir)}")
 
-    print("\nnext: run detect_level.py, read the statement, define the oracle (Phase 2).")
+    print("\nnext: study the parsed inputs and persist findings to notes/inputs.md "
+          "(Phase 0), then identify the kind (Phase 1).")
     return 0
 
 

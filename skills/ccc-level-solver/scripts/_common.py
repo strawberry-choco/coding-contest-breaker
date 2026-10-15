@@ -70,7 +70,11 @@ def _deep_update(base: dict, over: dict) -> None:
 # files
 # --------------------------------------------------------------------------- #
 def find_statement(level_dir: Path, cfg: dict) -> Path | None:
-    """Return the problem statement path, if one can be found."""
+    """Return the problem statement path, if one can be found.
+
+    Provided file names are authoritative: the level.json "statement" key (or
+    these fallbacks) resolves names like `level-2.pdf` untouched.
+    """
     if cfg.get("statement"):
         p = level_dir / cfg["statement"]
         if p.exists():
@@ -80,9 +84,10 @@ def find_statement(level_dir: Path, cfg: dict) -> Path | None:
         p = level_dir / name
         if p.exists():
             return p
-    for p in sorted(level_dir.glob("statement*")):
-        if p.is_file():
-            return p
+    for pattern in ("statement*", "level-*.pdf"):
+        for p in sorted(level_dir.glob(pattern)):
+            if p.is_file():
+                return p
     return None
 
 
@@ -100,8 +105,40 @@ def iter_inputs(level_dir: Path, cfg: dict) -> list[Path]:
 
 
 def output_path_for(level_dir: Path, cfg: dict, input_path: Path) -> Path:
-    """Map an input file to its output file (same base name, .out)."""
+    """Map an input file to its answer file, mirroring the provided naming.
+
+    School track pairs files as `in_X.<ext>` / `out_X.<ext>`, so an input with
+    the `in_` prefix gets its answer under the `out_` prefix with the same
+    suffix (`in_level3_1.txt` -> `out_level3_1.txt`). Otherwise the shared-stem
+    convention applies (`level3_1.in` -> `level3_1.out`).
+    """
+    name = input_path.name
+    if name.lower().startswith("in_"):
+        return level_dir / cfg["outputs"] / ("out_" + name[3:])
     return level_dir / cfg["outputs"] / (input_path.stem + ".out")
+
+
+def sample_pairs(samples_dir: Path) -> list[tuple[Path, Path]]:
+    """Pair worked-example inputs with their provided answers, verbatim names.
+
+    Convention 1: shared stem (X.in <-> X.out).
+    Convention 2: in_/out_ prefixes, any suffix (in_X.txt <-> out_X.txt).
+    """
+    pairs: list[tuple[Path, Path]] = []
+    if not samples_dir.is_dir():
+        return pairs
+    for inp in sorted(samples_dir.iterdir()):
+        if not inp.is_file() or inp.name.startswith("."):
+            continue
+        if inp.name.lower().startswith("in_"):
+            out = inp.with_name("out_" + inp.name[3:])
+        elif inp.suffix.lower() == ".in":
+            out = inp.with_suffix(".out")
+        else:
+            continue
+        if out.exists():
+            pairs.append((inp, out))
+    return pairs
 
 
 # --------------------------------------------------------------------------- #
@@ -150,17 +187,34 @@ def _tokens(text: str) -> list[str]:
     return text.split()
 
 
+def trim_output(text: str) -> str:
+    """Strip trailing whitespace and newlines.
+
+    The platform's provided answers disagree about their trailing bytes — some
+    end with a single `\\n`, some with a blank line, the level-1 fixture with
+    none — and no level's convention is stable enough to imitate, so trailing
+    newlines are insignificant by decision: every comparison trims both sides
+    before looking at anything.
+    """
+    return text.rstrip()
+
+
 def compare_outputs(candidate: str, expected: str, mode: str = "tokens",
                     atol: float | None = None, rtol: float | None = None
                     ) -> tuple[bool, str]:
-    """Compare two answer texts. Returns (ok, detail).
+    """Compare two answer texts, ignoring trailing newlines. Returns (ok, detail).
+
+    Both sides are trimmed of trailing whitespace/newlines first (see
+    trim_output), so a missing or extra final newline is never a mismatch.
 
     mode:
-      - "exact":  byte-for-byte
+      - "exact":  byte-for-byte apart from that trailing trim
       - "lines":  line-wise, ignoring trailing whitespace per line
       - "tokens": token-wise, ignoring all whitespace runs (default)
     Float tolerance (atol/rtol) applies to numeric tokens when set.
     """
+    candidate, expected = trim_output(candidate), trim_output(expected)
+
     if atol is not None or rtol is not None:
         ok, detail = _compare_numeric(candidate, expected, atol or 0.0, rtol or 0.0)
         if ok is not None:
@@ -172,8 +226,8 @@ def compare_outputs(candidate: str, expected: str, mode: str = "tokens",
         return False, _first_diff_line(candidate, expected)
 
     if mode == "lines":
-        a = [ln.rstrip() for ln in candidate.rstrip("\n").split("\n")]
-        b = [ln.rstrip() for ln in expected.rstrip("\n").split("\n")]
+        a = [ln.rstrip() for ln in candidate.split("\n")]
+        b = [ln.rstrip() for ln in expected.split("\n")]
     else:  # tokens
         a = _tokens(candidate)
         b = _tokens(expected)
@@ -206,8 +260,8 @@ def _compare_numeric(candidate: str, expected: str, atol: float, rtol: float
 
 
 def _first_diff_line(candidate: str, expected: str) -> str:
-    a = candidate.rstrip("\n").split("\n")
-    b = expected.rstrip("\n").split("\n")
+    a = trim_output(candidate).split("\n")
+    b = trim_output(expected).split("\n")
     for i in range(max(len(a), len(b))):
         av = a[i] if i < len(a) else "<missing>"
         bv = b[i] if i < len(b) else "<missing>"
@@ -243,7 +297,7 @@ def as_level_dir(value: str) -> Path:
 __all__ = [
     "DEFAULTS", "INPUT_SUFFIXES",
     "load_level", "save_level", "level_json_path",
-    "find_statement", "iter_inputs", "output_path_for",
-    "render", "run_command", "compare_outputs",
+    "find_statement", "iter_inputs", "output_path_for", "sample_pairs",
+    "render", "run_command", "compare_outputs", "trim_output",
     "die", "as_level_dir",
 ]

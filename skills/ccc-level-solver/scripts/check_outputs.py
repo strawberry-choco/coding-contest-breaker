@@ -9,7 +9,7 @@ Dispatch on ``kind``:
   any_valid    run judge.command (a checker) on each (input, output) pair
   optimization run judge.scorer on each output; report scores and best-known
   interactive  not supported here (use the level's interactor directly)
-  unknown      cannot check; run detect_level.py first
+  unknown      cannot check; record the kind in level.json first (Phase 1)
 """
 from __future__ import annotations
 
@@ -24,15 +24,7 @@ def _read(path: Path) -> str:
 
 
 def _sample_pairs(level_dir: Path, cfg: dict) -> list[tuple[Path, Path]]:
-    d = level_dir / cfg["samples"]
-    if not d.is_dir():
-        return []
-    pairs = []
-    for inp in sorted(d.glob("*.in")):
-        out = inp.with_suffix(".out")
-        if out.exists():
-            pairs.append((inp, out))
-    return pairs
+    return C.sample_pairs(level_dir / cfg["samples"])
 
 
 def check_exact(level_dir: Path, cfg: dict, quiet: bool) -> int:
@@ -56,7 +48,7 @@ def check_exact(level_dir: Path, cfg: dict, quiet: bool) -> int:
     #    run the solver on the sample input into a temp file.
     fails = 0
     for inp, expected in pairs:
-        cand = level_dir / cfg["outputs"] / (inp.stem + ".out")
+        cand = C.output_path_for(level_dir, cfg, inp)
         tmp = None
         if not cand.exists():
             tmp = level_dir / cfg["outputs"] / f"__sample_{inp.stem}.out"
@@ -116,7 +108,25 @@ def check_any_valid(level_dir: Path, cfg: dict, quiet: bool) -> int:
             print(f"  [FAIL] {inp.name}: invalid ({detail})")
         elif not quiet:
             print(f"  [ ok ] {inp.name}: valid")
-    print(f"\nany_valid: {checked - fails}/{checked} outputs valid")
+
+    # The checker must also accept every provided sample answer — an oracle
+    # that rejects a sample is broken by definition, and the real inputs have
+    # no reference to catch it (Phase 3's rule, enforced here too).
+    samples = _sample_pairs(level_dir, cfg)
+    for inp, expected in samples:
+        cmd = C.render(judge_cmd, level_dir, input_path=inp, output_path=expected)
+        rc, sout, serr = C.run_command(cmd, cwd=level_dir)
+        checked += 1
+        if rc != 0:
+            fails += 1
+            detail = (serr.strip() or sout.strip())[:160]
+            print(f"  [FAIL] sample {expected.name}: checker rejects the "
+                  f"provided answer ({detail})")
+        elif not quiet:
+            print(f"  [ ok ] sample {expected.name}: checker accepts it")
+
+    tail = f" ({len(samples)} sample answer(s))" if samples else ""
+    print(f"\nany_valid: {checked - fails}/{checked} outputs valid{tail}")
     return 1 if fails else 0
 
 
@@ -206,7 +216,8 @@ def main(argv: list[str] | None = None) -> int:
         print("interactive level: run the level's interactor directly; "
               "check_outputs.py does not handle it")
         return 2
-    print(f"unknown level kind (kind={kind!r}); run detect_level.py first")
+    print(f"unknown level kind (kind={kind!r}); record it in level.json "
+          f"(Phase 1 of SKILL.md)")
     return 3
 
 

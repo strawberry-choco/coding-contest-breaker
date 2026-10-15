@@ -64,8 +64,33 @@ the solver as a subprocess over pipes. This is both oracle and test harness.
 - **GREEN:** implement the simplest correct solver (`templates/solver.py.tmpl`).
   Iterate `run_solver.py` → `check_outputs.py` → `pytest` until green.
 - **REFACTOR / SCALE:** replace the baseline with an efficient algorithm; keep
-  the tests green. For optimization, wrap the loop from Phase 4 and re-run the
+  the tests green. For optimization, wrap the loop from Phase 5 and re-run the
   scorer after every accepted improvement.
+
+## Independent verification (the blind oracle)
+
+Unit tests written from the same reading of the statement as the solver
+**confirm** the solver instead of testing it: they share the author's blind
+spots, so a wrong mental model passes its own tests. (Real case: a staggered
+grid's border test was wrong, passed ten unit tests and the structure checker,
+and was caught only by a differently formulated implementation.)
+
+After GREEN on an `exact`/`any_valid` level:
+
+1. Have a **fresh-context subagent write `oracle.py` blind** — give it the
+   statement and `notes/spec.md`, withhold `solver.py`. Formulation
+   independence (different algorithm shape, e.g. union-find vs BFS) plus
+   author independence is the point.
+2. Run `scripts/cross_check.py`: it feeds samples, real inputs, and — when the
+   level provides `fuzz_gen.py` with `generate(rng) -> str` — random small
+   cases to both modules and prints a **counterexample** (input + both
+   answers) on the first disagreement. A counterexample is a certificate;
+   "the code looks right" is not. Agreement is the gate for declaring the
+   level solved.
+3. Optionally, a second subagent reads statement + solver together and checks
+   semantic drift ("does the code implement every stated rule?") — the one
+   failure class a second implementation cannot catch, since it can share the
+   misreading. One agent run per level is cheap next to a wrong upload.
 
 ## Regression discipline (within one level only)
 
@@ -73,13 +98,13 @@ Every time you fix a bug, add a test that reproduces it. Contest solvers fail on
 edge cases (size 1, maximal input, ties, ambiguous whitespace) — encode each one
 you discover **for the level you are currently solving**.
 
-Do **not** carry tests, rules, or assumptions across levels. A CCC level builds on
-the previous level's model but **adds or removes rules**, so a test that pinned the
-previous level's behavior may be wrong for this level — or assert something the new
-statement forbids. Backward compatibility across levels is explicitly *not* a goal:
-re-derive the oracle and tests from the current statement every time, and expect to
-delete or rewrite prior tests rather than keep them green. Earlier tests are not a
-safety net for later levels; they are a liability.
+Do **not** carry tests, rules, or assumptions across levels. Each level is a
+**fresh contract** (defined in `../SKILL.md`): a test pinning the previous
+level's behavior may be wrong here — or assert something the new statement
+forbids. Re-derive the oracle and tests from the current statement every
+time, and expect to delete or rewrite prior tests rather than keep them
+green. Earlier tests are not a safety net for later levels; they are a
+liability.
 
 ## When you may change the oracle
 

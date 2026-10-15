@@ -1,0 +1,18 @@
+[project]
+name = "coding-contest-breaker"
+version = "0.1.0"
+description = "A TDD pipeline for solving Cloudflight Coding Contest practice levels"
+requires-python = ">=3.9"
+
+# Runtime scripts stay dependency-free; pytest is a dev-only dependency.
+[dependency-groups]
+dev = ["pytest>=8"]
+
+# Not an installable package — uv should only manage the dev environment.
+[tool.uv]
+package = false
+
+# Every level workspace scaffolds tests/test_level.py (same basename), so the
+# default path-based import mode collides. importlib mode handles duplicates.
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"

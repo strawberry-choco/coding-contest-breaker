@@ -1,4 +1,4 @@
-"""TDD tests for this level (Phase 2/3).
+"""TDD tests for this level (Phase 3/4).
 
 These run in RED before the solver is finished and GREEN afterwards. Extend with
 regression tests for every edge case / bug you find **in this level**.
@@ -32,18 +32,41 @@ def _load_solver():
 
 
 def _samples():
+    """Worked-example pairs, provided names kept verbatim.
+
+    Recognizes both platform conventions: X.in + X.out and
+    in_X.<ext> + out_X.<ext> (School track).
+    """
     d = LEVEL / "samples"
     if not d.is_dir():
         return []
     pairs = []
-    for inp in sorted(d.glob("*.in")):
-        out = inp.with_suffix(".out")
+    for inp in sorted(d.iterdir()):
+        if not inp.is_file() or inp.name.startswith("."):
+            continue
+        if inp.name.lower().startswith("in_"):
+            out = inp.with_name("out_" + inp.name[3:])
+        elif inp.suffix == ".in":
+            out = inp.with_suffix(".out")
+        else:
+            continue
         if out.exists():
             pairs.append((inp, out))
     return pairs
 
 
-def test_samples_pass_oracle():
+def _inputs():
+    """Real input files in inputs/ (any provided naming)."""
+    d = LEVEL / "inputs"
+    if not d.is_dir():
+        return []
+    return [p for p in sorted(d.iterdir())
+            if p.is_file() and not p.name.startswith(".")
+            and (p.suffix in (".in", ".txt", ".dat", ".csv")
+                 or p.name.lower().startswith("in_"))]
+
+
+def test_samples_pass_oracle(tmp_path):
     """The solver's output for each sample must pass the oracle."""
     solver = _load_solver()
     pairs = _samples()
@@ -55,8 +78,7 @@ def test_samples_pass_oracle():
         answer = solver.solve(inp.read_text(encoding="utf-8"))
         if not answer.endswith("\n"):
             answer += "\n"
-        cand = LEVEL / "outputs" / f"__test_{inp.stem}.out"
-        cand.parent.mkdir(parents=True, exist_ok=True)
+        cand = tmp_path / f"{inp.stem}.out"  # scratch stays out of outputs/
         cand.write_text(answer, encoding="utf-8")
 
         if checker.exists():
@@ -74,7 +96,7 @@ def test_samples_pass_oracle():
     assert not failures, "samples failed:\n" + "\n".join(failures)
 
 
-def test_optimization_beats_or_ties_baseline():
+def test_optimization_beats_or_ties_baseline(tmp_path):
     """For optimization levels, the solver must not be worse than the baseline."""
     if KIND != "optimization":
         return  # not applicable
@@ -86,8 +108,7 @@ def test_optimization_beats_or_ties_baseline():
     solver = _load_solver()
     for inp, expected in _samples():
         answer = solver.solve(inp.read_text(encoding="utf-8"))
-        cand = LEVEL / "outputs" / f"__test_{inp.stem}.out"
-        cand.parent.mkdir(parents=True, exist_ok=True)
+        cand = tmp_path / f"{inp.stem}.out"  # scratch stays out of outputs/
         cand.write_text(answer, encoding="utf-8")
         res = subprocess.run(
             [sys.executable, str(scorer), str(inp), str(cand)],
@@ -107,9 +128,15 @@ def test_optimization_beats_or_ties_baseline():
 
 
 # ---------------------------------------------------------------------------
-# Add your own regression tests below, e.g.:
+# Add your own regression tests below. Contract reminder: solve() returns the
+# answer WITHOUT a trailing newline — main() adds it when writing the file.
+# Normalize through _solved() before byte-exact assertions.
+#
+# def _solved(solver, text: str) -> str:
+#     out = solver.solve(text)
+#     return out if not out or out.endswith("\n") else out + "\n"
 #
 # def test_single_element_input():
 #     solver = _load_solver()
-#     assert solver.solve("1\n").split() == ["1"]
+#     assert _solved(solver, "1\n") == "1\n"
 # ---------------------------------------------------------------------------

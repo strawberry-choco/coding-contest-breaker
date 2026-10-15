@@ -6,7 +6,8 @@ Usage:
 
 Reads level.json for the run command (default: python3 solver.py {in} {out}).
 For each file in inputs/, runs the command with cwd = level_dir and writes the
-answer to outputs/<same base>.out. Prints per-file status and a summary, and
+answer to outputs/ under the provided naming: in_X.<ext> -> out_X.<ext>,
+otherwise X.in -> X.out. Prints per-file status and a summary, and
 exits non-zero if any run failed.
 """
 from __future__ import annotations
