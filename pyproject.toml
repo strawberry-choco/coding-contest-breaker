@@ -3,10 +3,19 @@ name = "coding-contest-breaker"
 version = "0.1.0"
 description = "A TDD pipeline for solving Cloudflight Coding Contest practice levels"
 requires-python = ">=3.9"
+dependencies = [
+    "ortools>=9.15.6755",
+]
 
 # Runtime scripts stay dependency-free; pytest is a dev-only dependency.
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "networkx>=3.2.1",
+    "numpy>=2.0.2",
+    "ortools>=9.15.6755",
+    "pytest>=8",
+    "scipy>=1.13.1",
+]
 
 # Not an installable package — uv should only manage the dev environment.
 [tool.uv]
@@ -14,5 +23,10 @@ package = false
 
 # Every level workspace scaffolds tests/test_level.py (same basename), so the
 # default path-based import mode collides. importlib mode handles duplicates.
+# `slow` marks full-pipeline tests (solves every real input); the fast RED/GREEN
+# loop runs `pytest -m "not slow"`.
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
+markers = [
+    "slow: solves every real input (minutes); run with pytest -m slow",
+]

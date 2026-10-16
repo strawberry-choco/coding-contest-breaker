@@ -6,7 +6,11 @@ regression tests for every edge case / bug you find **in this level**.
 Scope: these tests cover THIS level only. Do not copy them into a later level or
 assume they still hold there — a later CCC level adds or removes rules, so its
 contract differs. Re-derive the tests from the current statement each time.
-Run with:  pytest -q
+
+Two loops (the `slow` marker is registered in the repo's pyproject):
+  fast RED/GREEN loop:  pytest -q -m "not slow"     (seconds — run constantly)
+  full pipeline:        pytest -q                                   (minutes)
+Mark any test that solves the real inputs `@pytest.mark.slow`.
 """
 from __future__ import annotations
 
@@ -15,6 +19,8 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 LEVEL = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(LEVEL))
@@ -139,4 +145,15 @@ def test_optimization_beats_or_ties_baseline(tmp_path):
 # def test_single_element_input():
 #     solver = _load_solver()
 #     assert _solved(solver, "1\n") == "1\n"
+#
+# The full-pipeline test lives behind the slow marker so the RED/GREEN loop
+# stays fast; CI / the finalize phase runs it unfiltered:
+#
+# @pytest.mark.slow
+# def test_all_inputs_pass_oracle():
+#     solver = _load_solver()
+#     for inp in _inputs():
+#         answer = solver.solve(inp.read_text(encoding="utf-8"))
+#         ok, msg = _checker_runs(inp.read_text(encoding="utf-8"), answer)
+#         assert ok, f"{inp.name}: solver answer rejected: {msg}"
 # ---------------------------------------------------------------------------

@@ -16,13 +16,41 @@ Contest from a local level directory. **Manual bridge** model: a human
 downloads the level's statement and inputs and uploads the resulting output
 files; this skill never talks to the contest platform.
 
+**Execution model — orchestrator only.** The agent running this skill never
+performs phase work in its own context: every phase runs in a subagent, and
+the orchestrator sequences phases, verifies their outputs, and decides.
+
 ## Core principle
 
 **Build the judge before the solution.** For every level, first construct a
 *local oracle* — the thing that decides whether an output is acceptable
 (correctness) or how good it is (optimization). Only then write the solver,
 driven by tests derived from that oracle. In contest TDD, "the test" is
-usually a checker or scorer, not a fixed expected string.
+usually a checker or scorer, not a fixed expected string. The attack plan
+(Phase 2) is written before any solver code — that is where the problem gets
+reduced, split, and matched to tools.
+
+## Orchestration protocol
+
+The orchestrator drives every phase the same way:
+
+1. **Dispatch** a general-purpose subagent with a self-contained brief: the
+   level directory, the phase's steps (copied from this file — subagents are
+   stateless and cannot see this conversation), the artifacts it must
+   **read** and the artifacts it must **write**, and the return contract: a
+   compact summary (verdicts, counts, sizes, paths, anomalies) — never raw
+   data, never long tables.
+2. **Pass state through the level directory.** Phases communicate only via
+   files (`notes/*.md`, `level.json`, `tests/`, `solver.py`, `outputs/`);
+   each brief names them explicitly. The orchestrator's context carries
+   paths and verdicts, not data.
+3. **Verify against the phase's done-when**: the artifact exists, plus 2-3
+   spot-checks (one small read each) of claims in the returned summary or
+   the artifact. Distrust → re-dispatch with the discrepancy named.
+4. **Gate**: a phase that has not met its done-when blocks the next phase.
+   The orchestrator's own tool use stays cheap — file-existence checks,
+   small reads, one-command status checks with bounded output; everything
+   that produces or transforms data belongs to a subagent.
 
 ## Inputs
 
@@ -67,34 +95,43 @@ the ground truth it reasons over: counts read off an un-normalized directory
 mislead, and parsers written from the statement's format table miss
 byte-level quirks the files themselves show immediately.
 
-1. Normalize the workspace first: flat download → `scaffold_level.py
-   --import` (see Inputs). Provided names stay verbatim, moving into `inputs/`
-   and `samples/`.
-2. Read the statement once for the **input format**. Statements are often
-   image slides: run `pdftotext` for copyable text, then **render every page
-   and read them visually regardless** — pdftotext garbles or interleaves
-   slide layouts, and a model built on silently-garbled text is the expensive
-   failure. Use
-   `python3 skills/ccc-level-solver/scripts/render_statement.py "<pdf>"`
-   (renders all pages at 300 dpi into /tmp — never into the level dir). When
-   table characters stay too small to read reliably, re-render that region
-   with `--crop PAGE:fx:fy:fw:fh` (fractions of the page; the crop keeps
-   native pixels while full-page views get downsampled). Transcribe I/O
-   tables from the image character by character; never pair columns by
-   position in the `pdftotext -layout` output. Render long PDFs in batches
-   (`--pages 1-8`).
-3. Parse and study **every** provided input: block/record counts, shapes,
-   character or value invariants, size ranges, delimiters and whitespace
-   placement (verify byte-level — e.g. blank lines between *and* after the
-   header). Cross-check each claimed invariant against all files, not one.
-4. **Persist the transformed output to disk in the level folder** —
-   throwaway analysis dies with the context window:
-   - `notes/inputs.md` — what was parsed and what was found: per-file
-     structure and stats, the invariants a parser must accept, format quirks
-     with evidence, and the sizes that will choose the algorithm.
-   - for non-trivial formats, keep the working parser as
-     `notes/parse_inputs.py`; later phases adapt it instead of re-deriving it
-     (a blind oracle still writes its own — it must inherit no assumptions).
+**Brief** (subagent):
+- Normalize the workspace first: flat download → `scaffold_level.py
+  --import` (see Inputs). Provided names stay verbatim, moving into
+  `inputs/` and `samples/`.
+- Read the statement once for the **input format**. Statements are often
+  image slides: run `pdftotext` for copyable text, then **render every page
+  and read them visually regardless** — pdftotext garbles or interleaves
+  slide layouts, and a model built on silently-garbled text is the expensive
+  failure. Use
+  `python3 skills/ccc-level-solver/scripts/render_statement.py "<pdf>"`
+  (renders all pages at 300 dpi into /tmp — never into the level dir). When
+  table characters stay too small to read reliably, re-render that region
+  with `--crop PAGE:fx:fy:fw:fh` (fractions of the page; the crop keeps
+  native pixels while full-page views get downsampled). Transcribe I/O
+  tables from the image character by character; never pair columns by
+  position in the `pdftotext -layout` output. Render long PDFs in batches
+  (`--pages 1-8`).
+- Parse and study **every** provided input: block/record counts, shapes,
+  character or value invariants, size ranges, delimiters and whitespace
+  placement (verify byte-level — e.g. blank lines between *and* after the
+  header). Cross-check each claimed invariant against all files, not one.
+- **Persist everything to disk in the level folder** — throwaway analysis
+  dies with the context window, and long tables printed to a terminal
+  mangle (dropped characters): write files, read them back with the file
+  tool:
+  - `notes/inputs.md` — what was parsed and what was found: per-file
+    structure and stats, the invariants a parser must accept, format quirks
+    with evidence, and the sizes that will choose the algorithm.
+  - for non-trivial formats, keep the working parser as
+    `notes/parse_inputs.py`; later phases adapt it instead of re-deriving it
+    (a blind oracle still writes its own — it must inherit no assumptions).
+
+**Return**: the file inventory, record counts, size ranges, format quirks,
+anomalies, and the paths of everything written.
+**Orchestrator verify**: the files exist; 2-3 claims in `notes/inputs.md`
+spot-check clean against the actual inputs (one read each). Distrust
+triggers a re-dispatch with the discrepancy named.
 
 ### Phase 1 — Identify the level kind
 
@@ -110,18 +147,19 @@ rules, and a script cannot tell the difference. Real examples — level 4's only
 predecessor"*, which a keyword scan reads as a scoring directive. Read the
 statement and decide.
 
-1. Take the inventory yourself: which artifacts exist (statement, `inputs/`,
+**Brief** (subagent):
+1. Take the inventory: which artifacts exist (statement, `inputs/`,
    `samples/`, `verifier/` — a provided visualizer often sits under a
-   platform name rather than `visualizer.html`), and what the statement's rules
-   actually say.
-2. Classify by *how an answer is judged*, never by how it is delivered: CCC is
+   platform name rather than `visualizer.html`), and what the statement's
+   rules actually say.
+2. **Read `references/level-kinds.md`** (the full taxonomy, tell-tale
+   phrases, and judging method per kind) before classifying. Then classify by
+   *how an answer is judged*, never by how it is delivered: CCC is
    always output-only while the kind varies per level. Choose from: `exact`
    (one correct answer, compared to a reference), `any_valid` (many valid
    answers; a checker validates format + constraints), `optimization` (scored;
    "better" wins), `interactive` (converses with a judge — usually unsupported
    here), `unknown` (not enough information; gather more before proceeding).
-   Full taxonomy, tell-tale phrases, and judging method per kind:
-   `references/level-kinds.md`.
 3. An input-supplied optimum is **not** `optimization`: when the statement says
    the given number *is the maximum possible*, that is an achievability
    guarantee for a constructive (`any_valid`) level, not a score to beat.
@@ -129,12 +167,19 @@ statement and decide.
    ships one.
 4. Record the decision in `level.json` (schema below).
 
-### Phase 2 — Recon and specification
+**Return**: the kind and 2-3 lines of evidence from the statement.
+**Orchestrator verify**: `level.json` parses and names a known kind; the
+evidence quotes the statement.
 
-**Done when `notes/spec.md` pins the contract**: output format
-byte-for-byte, objective, constraints, edge cases. (The input format was
-pinned in Phase 0; re-consult the rendered pages and crops as needed.)
+### Phase 2 — Recon, specification, and attack plan
 
+**Done when `notes/spec.md` pins the contract (output format
+byte-for-byte, objective, constraints, edge cases) AND `notes/attack.md`
+records the attack plan — both before any solver code is written.** (The
+input format was pinned in Phase 0; re-consult the rendered pages and crops
+as needed.)
+
+**Brief** (subagent):
 - The model builds level over level: earlier levels' `notes/spec.md` files
   document the shared conventions (grid geometry, I/O format, character
   semantics). Read them as reference, then re-verify every rule against this
@@ -152,6 +197,38 @@ pinned in Phase 0; re-consult the rendered pages and crops as needed.)
   them. Never generalize a rule from samples alone.
 - Write the specification into `notes/spec.md` (create it). Short and
   concrete.
+- **Write the attack plan into `notes/attack.md` — the reduce-then-split
+  work, on paper, before coding starts:**
+  - **Reduce**: translate the statement into the problem's exact structure
+    (packing, covering, counting, ...) and restate the objective in those
+    terms.
+  - **Split**: break it into independent sub-problems — exact solutions for
+    small cases, provable periodic patterns for the bulk, and seam conditions
+    you can verify. Prove the pieces compose (independent regions add up),
+    and only then attack the remaining gap. Example: a no-touch packing level
+    reduces to rectangle packing; columns decompose into exact-DP bases plus
+    periodic strips whose seam independence you prove once.
+  - **Choose tools library-first, per sub-problem**: a CP-SAT/ILP solver
+    (e.g. OR-Tools) for packing and covering, networkx for graphs,
+    numpy/scipy for numerics. Name the library you will try FIRST and the
+    input sizes it must handle; hand-roll only what no library provides, and
+    only after measuring that the library is too slow for those sizes. When
+    the judge demands exact attainment (`any_valid` with a supplied maximum),
+    the library IS the plan — any constructive pattern is a warm hint or a
+    fallback, never a substitute.
+  - **Record the constraints and the order of attempts**: level code is
+    iterative only (no recursive functions — solver, checker, scripts, any
+    language; explicit stacks, queues, bitmask loops, since recursion blows
+    Python's ~1000-frame limit on large grids); the fallback chain (e.g.
+    constructive pattern → exact solver → heuristic repair) with what each
+    attempt must achieve to count as done; and benchmark numbers go into
+    `notes/`, never the terminal.
+
+**Return**: the spec's non-obvious deltas (format quirks, objective), the
+attack plan's structure and chosen tools, and anything ambiguous enough to
+need an orchestrator decision.
+**Orchestrator verify**: both files exist; one spec rule spot-checks clean
+against the statement.
 
 ### Phase 3 — Build the oracle and tests (RED)
 
@@ -160,6 +237,7 @@ exists yet, not because the oracle rejects a provided sample. A machine-
 checkable definition of "acceptable" / "good" exists and is wired to tests
 *before* any solver is written.
 
+**Brief** (subagent):
 - Score/profile the oracle against the provided samples *first*: it must
   accept every sample answer. If it rejects one, the oracle is wrong — fix
   the oracle, never the sample.
@@ -180,24 +258,36 @@ checkable definition of "acceptable" / "good" exists and is wired to tests
   answers or beats the baseline; a regression test for every bug you fix.
   Scope tests to **this level** — see the regression discipline in
   `references/tdd-workflow.md` for why they must not carry across levels.
-- Run the tests and **watch them fail** — that is the RED state.
+- Run the fast loop (`pytest -q -m "not slow"`) and **watch it fail** —
+  that is the RED state.
+
+**Return**: the RED confirmation — which tests fail and why — plus the
+sample-check verdict.
+**Orchestrator verify**: the test file and the oracle exist; the returned
+failures name the missing solver, not sample rejections.
 
 ### Phase 4 — Implement a baseline solver (GREEN)
 
 **Done when every output in `outputs/` passes the oracle and the tests are
 green** — via the simplest thing that achieves it.
 
+**Brief** (subagent):
 - Start from `templates/solver.py.tmpl`. Keep the contract: read one input,
   write one answer, deterministic.
-- Prefer a correct-but-slow baseline first (brute force, DP, simulation).
+- Prefer a correct-but-slow baseline first (brute force, DP, simulation) —
+  per the attack plan's tool choices.
 - **Smoke test after every solver edit**: solve the sample and run the checker
   on it (seconds) before any longer run. It catches crashes, import errors,
   and format breaks that otherwise surface mid-pipeline minutes later.
 - Loop: run `python3 skills/ccc-level-solver/scripts/run_solver.py
   "<level_dir>"`, then `python3 skills/ccc-level-solver/scripts/check_outputs.py
-  "<level_dir>"`, then the tests. Fix until green.
+  "<level_dir>"`, then the fast loop. Fix until green.
 - Edit the oracle only when it demonstrably rejects a valid answer — and pin
   the corrected behavior with a test.
+
+**Return**: the green confirmation (fast loop) and per-input status.
+**Orchestrator verify**: `outputs/` holds one answer per input, named after
+its input.
 
 ### Phase 5 — Iterate (scale up, or optimize)
 
@@ -205,48 +295,60 @@ green** — via the simplest thing that achieves it.
 any_valid), or improvements stalled / optimality proven (optimization) —
 with the best-known answer in `outputs/`.
 
-- `exact` / `any_valid`: scale to the real inputs, then pass the
-  **cross-check gate**:
-  1. Check the limits; replace the baseline with an efficient algorithm if
-     needed. Verify with the checker.
-  2. Dispatch a fresh-context subagent to write `oracle.py` **blind** — feed
-     it only the statement and `notes/spec.md`, never `solver.py`. The
-     rationale (why independence catches what self-testing cannot) is in
-     `references/tdd-workflow.md`.
-  3. Run `python3 scripts/cross_check.py "<level_dir>"`: solver vs oracle
-     over samples, real inputs, and (when `fuzz_gen.py` provides
-     `generate(rng) -> str`) random small cases, printing a concrete
-     counterexample on the first failure.
-  4. The gate: for `exact`, solver–oracle **agreement**; for `any_valid`,
-     cross_check.py switches to **validity mode** — both answers must pass
-     `checker.py`, since a byte-diff would flag legitimate
-     multiple-solution answers as fake counterexamples. Passing this gate is
-     what qualifies a level as solved.
-- `optimization`: this is the core loop.
-  1. Score the current output; keep the best in `outputs/` and its score in
-     `level.json` (`judge.best`).
-  2. Improve with a heuristic strategy: better construction, greedy + local
-     search (2-opt, swap, relocation), simulated annealing, or an exact
-     method on small cases used to seed/validate heuristics.
-  3. A candidate replaces the incumbent **only if it is valid AND strictly
-     better** (respecting `direction`) — a worse answer never lands in
-     `outputs/`.
-  4. Stop when improvements stall for a meaningful number of iterations,
-     when a time budget is hit, or when you can prove optimality.
-- Keep every accepted improvement reproducible: solver code + seed go in the
-  repo.
+Three subagent roles, sequenced by the orchestrator:
+
+- **Iterator** — brief per branch:
+  - `exact` / `any_valid`: check the limits; replace the baseline with an
+    efficient algorithm if needed. Verify with the checker. Keep every
+    accepted improvement reproducible: solver code + seed go in the repo.
+  - `optimization`: score the current output; keep the best in `outputs/`
+    and its score in `level.json` (`judge.best`). Improve with a heuristic
+    strategy: better construction, greedy + local search (2-opt, swap,
+    relocation), simulated annealing, or an exact method on small cases used
+    to seed/validate heuristics. A candidate replaces the incumbent **only
+    if it is valid AND strictly better** (respecting `direction`) — a worse
+    answer never lands in `outputs/`. Stop when improvements stall for a
+    meaningful number of iterations, when a time budget is hit, or when
+    optimality is proven. Returns per-room/per-case status and what blocks
+    the gate.
+- **Blind oracle author** — a **fresh-context subagent** whose brief carries
+  only the statement and `notes/spec.md`, never `solver.py`: it writes
+  `oracle.py`. The rationale (why independence catches what self-testing
+  cannot) is in `references/tdd-workflow.md`.
+- **Gate runner** — runs `python3 scripts/cross_check.py "<level_dir>"`:
+  solver vs oracle over samples, real inputs, and (when `fuzz_gen.py`
+  provides `generate(rng) -> str`) random small cases, printing a concrete
+  counterexample on the first failure.
+
+**The gate**: for `exact`, solver–oracle **agreement**; for `any_valid`,
+cross_check.py switches to **validity mode** — both answers must pass
+`checker.py`, since a byte-diff would flag legitimate multiple-solution
+answers as fake counterexamples. Passing this gate is what qualifies a level
+as solved.
+
+**Return**: the gate verdict (or the stall/optimality proof), plus any
+counterexample text — relayed verbatim.
+**Orchestrator verify**: `oracle.py` exists and `cross_check.py` exited 0
+(re-run it inline — a bounded one-command check — if in doubt).
 
 ### Phase 6 — Finalize and package submission
 
 **Done when the pipeline passes on a clean state and the upload list is
 unambiguous.**
 
+**Brief** (subagent):
 - Run the full pipeline once more end-to-end: `run_solver.py` →
-  `check_outputs.py` → `cross_check.py` → tests.
+  `check_outputs.py` → `cross_check.py` → tests (unfiltered, including
+  slow).
 - Ensure `outputs/` contains exactly one answer per input, correctly named.
 - Write `report.md`: level kind, approach/algorithm, score or correctness
   result, runtime, assumptions, and known risks.
 - List the files to upload (manual) in the order the platform expects.
+
+**Return**: the pipeline verdict, the report summary, and the upload list —
+the orchestrator relays the upload list to the human verbatim.
+**Orchestrator verify**: `report.md` exists; the upload list matches
+`outputs/` one-to-one with the inputs.
 
 ## level.json
 
@@ -273,6 +375,12 @@ defaults.
 
 Placeholders: `{in}` input path, `{out}` output path, `{expected}` matching
 sample answer (when it exists), `{level}` the level directory.
+
+If level code added packages via `uv` (e.g. `ortools`), point `run` (and any
+scorer that imports them) at the repo's `.venv/bin/python` — helper scripts
+execute these commands with `cwd` set to the level dir, where bare `python3`
+has no third-party packages. (The skill's own `scripts/` stay
+dependency-free; only level code adds packages.)
 
 ## Helper scripts
 

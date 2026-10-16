@@ -100,6 +100,7 @@ you add:
   verifier/        optional provided checker/visualizer
   notes/inputs.md   your parsed-input analysis, persisted (Phase 0)
   notes/spec.md    your extracted specification (Phase 2)
+  notes/attack.md  your attack plan: structure, split, tool choice (Phase 2)
   level.json       kind + run + judge config
   solver.py        your solver (contract: {in} -> {out})
   checker.py       oracle for exact / any_valid
