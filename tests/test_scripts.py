@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "skills" / "ccc-level-solver" / "scripts"
+SCRIPTS = ROOT / ".agents" / "skills" / "ccc-level-solver" / "scripts"
 EXAMPLE = ROOT / "examples" / "level1"
 
 sys.path.insert(0, str(SCRIPTS))

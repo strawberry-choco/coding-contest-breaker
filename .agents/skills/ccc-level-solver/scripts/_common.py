@@ -34,8 +34,8 @@ DEFAULTS: dict = {
 
 INPUT_SUFFIXES = {".in", ".txt", ".dat", ".csv", ".input", ""}
 
-# Repo root (this file sits at <root>/skills/ccc-level-solver/scripts/).
-REPO_ROOT = Path(__file__).resolve().parents[3]
+# Repo root (this file sits at <root>/.agents/skills/ccc-level-solver/scripts/).
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 # --------------------------------------------------------------------------- #

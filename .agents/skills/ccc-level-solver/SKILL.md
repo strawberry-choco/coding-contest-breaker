@@ -88,7 +88,7 @@ in `references/ccc-io-conventions.md`:
 ```
 
 If the download is flat, normalize it first:
-`python3 skills/ccc-level-solver/scripts/scaffold_level.py --import <flat_dir> <level_dir>`
+`python3 .agents/skills/ccc-level-solver/scripts/scaffold_level.py --import <flat_dir> <level_dir>`
 (when the flat files already sit inside the level dir, pass the level dir as
 both arguments). `--import` **moves** the provided files into `inputs/` and
 `samples/`, so the level dir holds exactly one copy of each. The full workspace
@@ -123,7 +123,7 @@ byte-level quirks the files themselves show immediately.
   and read them visually regardless** — pdftotext garbles or interleaves
   slide layouts, and a model built on silently-garbled text is the expensive
   failure. Use
-  `python3 skills/ccc-level-solver/scripts/render_statement.py "<pdf>"`
+  `python3 .agents/skills/ccc-level-solver/scripts/render_statement.py "<pdf>"`
   (renders all pages at 300 dpi into /tmp — never into the level dir). When
   table characters stay too small to read reliably, re-render that region
   with `--crop PAGE:fx:fy:fw:fh` (fractions of the page; the crop keeps
@@ -365,8 +365,8 @@ green** — via the simplest thing that achieves it.
 - **Smoke test after every solver edit**: solve the sample and run the checker
   on it (seconds) before any longer run. It catches crashes, import errors,
   and format breaks that otherwise surface mid-pipeline minutes later.
-- Loop: run `python3 skills/ccc-level-solver/scripts/run_solver.py
-  "<level_dir>"`, then `python3 skills/ccc-level-solver/scripts/check_outputs.py
+- Loop: run `python3 .agents/skills/ccc-level-solver/scripts/run_solver.py
+  "<level_dir>"`, then `python3 .agents/skills/ccc-level-solver/scripts/check_outputs.py
   "<level_dir>"`, then the fast loop. Fix until green.
 - Edit the oracle only when it demonstrably rejects a valid answer — and pin
   the corrected behavior with a test.
@@ -377,17 +377,22 @@ its input.
 
 ### Phase 6 — Iterate (scale up, or optimize)
 
-**Done when the branch's gate holds** — checker ACCEPT on every provided
-input (`any_valid`), solver–oracle cross-check passed (`exact`), or
-improvements stalled / optimality proven (`optimization`) — with the
-best-known answer in `outputs/`.
+**Done when the branch's gate holds** — `check_outputs.py` ACCEPT on every
+provided input plus a green test suite (`any_valid`, and `exact` by
+default), or improvements stalled / optimality proven (`optimization`) —
+with the best-known answer in `outputs/`. For `exact`, a solver–oracle
+cross-check is additionally required only when a blind `oracle.py` was
+written (see below).
 
 The Iterator runs whenever the ladder still has open inputs. The blind-oracle
-and gate roles are optional deep-validation — dispatch them when the checker
-rejects an output you cannot diagnose. On `any_valid` the blind oracle and
-fuzz cross-check are skipped by default (the supplied target is ground
-truth); that budget goes into an adversarial re-read of `checker.py` against
-the statement instead.
+and gate roles are optional deep-validation — by default none of them runs:
+on `any_valid` the supplied target is ground truth, and on `exact` the
+checker's own independent recomputation already gates every output, so the
+default gate is `check_outputs.py` ACCEPT plus the test suite. Dispatch a
+blind oracle only when the checker rejects an output you cannot diagnose (or
+the orchestrator explicitly opts into deep-validation); on `any_valid` that
+budget instead goes into an adversarial re-read of `checker.py` against the
+statement.
 
 **EV checkpoints — the orchestrator owns the clock.** At least every 30
 wall-clock minutes, re-run `check_outputs.py` and count checker-ACCEPT files —
@@ -418,30 +423,35 @@ Three subagent roles, sequenced by the orchestrator:
     meaningful number of iterations, when a time budget is hit, or when
     optimality is proven. Returns per-room/per-case status and what blocks
     the gate.
-- **Blind oracle author** (`exact` by default; on `any_valid` only after an
-  undiagnosable checker rejection) — a **fresh-context subagent** whose brief
+- **Blind oracle author** (only after an undiagnosable checker rejection, or
+  when the orchestrator explicitly opts into deep-validation) — a
+  **fresh-context subagent** whose brief
   carries only the statement and `notes/spec.md`, never `solver.py`: it writes
   `oracle.py`. The rationale (why independence catches what self-testing
   cannot) is in `references/tdd-workflow.md`.
-- **Gate runner** — runs `python3 scripts/cross_check.py "<level_dir>"`:
-  solver vs oracle over samples, real inputs, and (when `fuzz_gen.py`
-  provides `generate(rng) -> str`) random small cases, printing a concrete
-  counterexample on the first failure. For `any_valid` there is no oracle and
-  no `fuzz_gen.py` by default — the gate is `check_outputs.py` ACCEPT on every
-  provided input; write a fuzzer only when a diagnosis needs one.
+- **Gate runner** — runs
+  `python3 .agents/skills/ccc-level-solver/scripts/cross_check.py "<level_dir>"`
+  (requires a written `oracle.py`; without one it aborts): solver vs oracle
+  over samples, real inputs, and (when `fuzz_gen.py` provides
+  `generate(rng) -> str`) random small cases, printing a concrete
+  counterexample on the first failure. When no `oracle.py` exists — the
+  default for every kind — the gate is `check_outputs.py` ACCEPT on every
+  provided input plus the test suite; write a fuzzer only when a diagnosis
+  needs one.
 
-**The gate**: for `exact`, solver–oracle **agreement**; for `any_valid`,
-cross_check.py switches to **validity mode** — both answers must pass
-`checker.py`, since a byte-diff would flag legitimate multiple-solution
-answers as fake counterexamples.
+**The gate** (when cross_check.py runs): for `exact`, solver–oracle
+**agreement**; for `any_valid`, cross_check.py switches to **validity mode**
+— both answers must pass `checker.py`, since a byte-diff would flag
+legitimate multiple-solution answers as fake counterexamples.
 
 **Return**: the gate verdict (or the stall/optimality proof), plus any
 counterexample text — relayed verbatim.
-**Orchestrator verify**: `exact` → `oracle.py` exists and `cross_check.py`
-exited 0 (re-run it inline — a bounded one-command check — if in doubt);
-`any_valid` → `check_outputs.py` reports ACCEPT on every provided input;
-`optimization` → `level.json` records the best score and `outputs/` holds the
-best-known answers.
+**Orchestrator verify**: `exact` / `any_valid` → `check_outputs.py` reports
+ACCEPT on every provided input and the test suite is green; when a blind
+`oracle.py` was written, additionally `cross_check.py` exited 0 (re-run it
+inline — a bounded one-command check — if in doubt); `optimization` →
+`level.json` records the best score and `outputs/` holds the best-known
+answers.
 
 ### Phase 7 — Finalize and package submission
 
@@ -499,8 +509,8 @@ in-process solver/oracle imports work there too.
 
 ## Helper scripts
 
-All live in `skills/ccc-level-solver/scripts/`; run them from the repo root,
-e.g. `python3 skills/ccc-level-solver/scripts/run_solver.py "<level_dir>"`.
+All live in `.agents/skills/ccc-level-solver/scripts/`; run them from the repo root,
+e.g. `python3 .agents/skills/ccc-level-solver/scripts/run_solver.py "<level_dir>"`.
 All are dependency-free Python 3 (stdlib only, so they run under a bare
 `python3` before `uv sync` has created the venv) and take the level directory
 as the first arg.

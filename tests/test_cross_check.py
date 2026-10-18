@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "skills" / "ccc-level-solver" / "scripts"
+SCRIPTS = ROOT / ".agents" / "skills" / "ccc-level-solver" / "scripts"
 
 SOLVER_OK = """\
 def solve(data):
