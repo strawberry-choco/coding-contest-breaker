@@ -34,6 +34,9 @@ DEFAULTS: dict = {
 
 INPUT_SUFFIXES = {".in", ".txt", ".dat", ".csv", ".input", ""}
 
+# Repo root (this file sits at <root>/skills/ccc-level-solver/scripts/).
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
 
 # --------------------------------------------------------------------------- #
 # level.json
@@ -144,9 +147,22 @@ def sample_pairs(samples_dir: Path) -> list[tuple[Path, Path]]:
 # --------------------------------------------------------------------------- #
 # running commands
 # --------------------------------------------------------------------------- #
+def venv_python() -> Path | None:
+    """The repo's venv interpreter, when it exists (absolute path)."""
+    p = REPO_ROOT / ".venv" / "bin" / "python"
+    return p if p.exists() else None
+
+
 def render(cmd: list[str], level_dir: Path, input_path: Path | None = None,
            output_path: Path | None = None, expected: Path | None = None) -> list[str]:
-    """Substitute placeholders in a command list."""
+    """Substitute placeholders in a command list and resolve the interpreter.
+
+    A bare ``python3``/``python`` as the first entry runs the repo's
+    ``.venv/bin/python`` when it exists, so level code can import the venv's
+    third-party packages. The path is absolute because commands execute with
+    ``cwd`` set to the level dir; without a venv the command passes through
+    untouched (system ``python3``).
+    """
     mapping = {
         "{level}": str(level_dir),
         "{in}": str(input_path) if input_path is not None else "",
@@ -158,6 +174,10 @@ def render(cmd: list[str], level_dir: Path, input_path: Path | None = None,
         for key, value in mapping.items():
             part = part.replace(key, value)
         rendered.append(part)
+    if rendered and rendered[0] in ("python3", "python"):
+        venv = venv_python()
+        if venv is not None:
+            rendered[0] = str(venv)
     return rendered
 
 
@@ -296,6 +316,7 @@ def as_level_dir(value: str) -> Path:
 
 __all__ = [
     "DEFAULTS", "INPUT_SUFFIXES",
+    "REPO_ROOT", "venv_python",
     "load_level", "save_level", "level_json_path",
     "find_statement", "iter_inputs", "output_path_for", "sample_pairs",
     "render", "run_command", "compare_outputs", "trim_output",

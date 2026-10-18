@@ -38,7 +38,9 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 import random
+import signal
 import sys
 import tempfile
 import traceback
@@ -48,6 +50,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _common as C  # noqa: E402
 
 MAX_INPUT_ECHO_LINES = 40
+_THIS_FILE = Path(__file__).resolve()
+
+
+def _reexec_under_venv() -> None:
+    """Continue under the repo's venv interpreter when one exists.
+
+    solver.py and oracle.py are imported in-process, so they can only use the
+    packages the running interpreter has — and level code is allowed to import
+    the venv's third-party packages. Re-exec transparently (same pid, exit
+    codes preserved) unless we are already on the venv python.
+    """
+    venv = C.venv_python()
+    if venv is None:
+        return
+    try:
+        if Path(sys.executable).resolve() == venv.resolve():
+            return
+        os.execv(str(venv), [str(venv), str(_THIS_FILE), *sys.argv[1:]])
+    except OSError:
+        pass  # broken venv — fall through and run as-is
 
 
 def _load_module(path: Path, name: str):
@@ -65,6 +87,31 @@ def _echo(text: str) -> str:
     head = "\n".join(lines[:MAX_INPUT_ECHO_LINES // 2])
     tail = "\n".join(lines[-(MAX_INPUT_ECHO_LINES // 2):])
     return f"{head}\n... ({len(lines)} lines total) ...\n{tail}"
+
+
+class _Timeout(Exception):
+    """Raised when a per-case solve exceeds its wall-clock bound."""
+
+
+def _run_with_deadline(fn, seconds: float | None, label: str):
+    """Call fn() with a wall-clock bound (no-op without SIGALRM / 0 disables).
+
+    A level's oracle may legitimately be slow; without a bound an in-process
+    solve can stall the whole gate silently.
+    """
+    if seconds is None or seconds <= 0 or not hasattr(signal, "SIGALRM"):
+        return fn()
+
+    def _handler(signum, frame):  # noqa: ARG001
+        raise _Timeout(f"{label} exceeded {seconds:g}s")
+
+    old = signal.signal(signal.SIGALRM, _handler)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        return fn()
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
 
 
 def _passes_checker(checker_py: Path, data: str, answer: str) -> str | None:
@@ -85,15 +132,17 @@ def _passes_checker(checker_py: Path, data: str, answer: str) -> str | None:
 
 def _run_case(solver, oracle, label: str, data: str,
               compare_mode: str, atol, rtol,
-              checker_py: Path | None = None):
+              checker_py: Path | None = None, timeout: float | None = None):
     """Run one case; return (counterexample_report | None, identical_bool)."""
     try:
-        got = solver.solve(data)
+        got = _run_with_deadline(lambda: solver.solve(data), timeout,
+                                 "solver.solve")
     except Exception:
         return (f"COUNTEREXAMPLE {label}: solver.solve() raised\n"
                 + traceback.format_exc(limit=3)), False
     try:
-        want = oracle.solve(data)
+        want = _run_with_deadline(lambda: oracle.solve(data), timeout,
+                                  "oracle.solve")
     except Exception:
         return (f"COUNTEREXAMPLE {label}: oracle.solve() raised\n"
                 + traceback.format_exc(limit=3)), False
@@ -119,11 +168,15 @@ def _run_case(solver, oracle, label: str, data: str,
 
 
 def main(argv: list[str]) -> int:
+    _reexec_under_venv()
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("level_dir")
     ap.add_argument("--fuzz", type=int, default=200,
                     help="fuzz cases when fuzz_gen.py exists (0 disables)")
     ap.add_argument("--seed", type=int, default=0, help="fuzz rng seed")
+    ap.add_argument("--timeout", type=float, default=600.0,
+                    help="per-case wall-clock bound for solver.solve and "
+                         "oracle.solve, seconds (0 disables)")
     args = ap.parse_args(argv[1:])
 
     level = C.as_level_dir(args.level_dir)
@@ -179,7 +232,8 @@ def main(argv: list[str]) -> int:
     identical = 0
     for label, data in cases:
         bad, same = _run_case(solver, oracle, label, data, mode, atol, rtol,
-                              checker_py=checker_py if validity_mode else None)
+                              checker_py=checker_py if validity_mode else None,
+                              timeout=args.timeout)
         if bad:
             failures.append(bad)
         if same:

@@ -64,7 +64,7 @@ the solver as a subprocess over pipes. This is both oracle and test harness.
 - **GREEN:** implement the simplest correct solver (`templates/solver.py.tmpl`).
   Iterate `run_solver.py` → `check_outputs.py` → `pytest` until green.
 - **REFACTOR / SCALE:** replace the baseline with an efficient algorithm; keep
-  the tests green. For optimization, wrap the loop from Phase 5 and re-run the
+  the tests green. For optimization, wrap the loop from Phase 6 and re-run the
   scorer after every accepted improvement.
 
 ## Independent verification (the blind oracle)
@@ -80,7 +80,10 @@ After GREEN on an `exact`/`any_valid` level:
 1. Have a **fresh-context subagent write `oracle.py` blind** — give it the
    statement and `notes/spec.md`, withhold `solver.py`. Formulation
    independence (different algorithm shape, e.g. union-find vs BFS) plus
-   author independence is the point.
+   author independence is the point. The oracle only has to produce
+   **checker-valid** answers — it need not be fast or deterministic;
+   `cross_check.py --timeout` bounds each solve, so don't spend effort
+   chasing speed here.
 2. Run `scripts/cross_check.py`: it feeds samples, real inputs, and — when the
    level provides `fuzz_gen.py` with `generate(rng) -> str` — random small
    cases to both modules and prints a **counterexample** (input + both

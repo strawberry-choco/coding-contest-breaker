@@ -85,6 +85,28 @@ def test_compare_numeric_tolerance():
 
 
 # --------------------------------------------------------------------------- #
+# interpreter resolution — level code may import the venv's packages
+# --------------------------------------------------------------------------- #
+@pytest.mark.skipif(C.venv_python() is None, reason="repo venv not present")
+def test_render_runs_bare_python_under_the_repo_venv():
+    cmd = C.render(["python3", "solver.py", "{in}", "{out}"],
+                   Path("/tmp/level"), input_path=Path("/tmp/level/a.txt"),
+                   output_path=Path("/tmp/level/b.txt"))
+    assert cmd[0] == str(C.venv_python())
+    assert cmd[1:] == ["solver.py", "/tmp/level/a.txt", "/tmp/level/b.txt"]
+
+
+def test_render_without_venv_keeps_bare_python(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(C, "REPO_ROOT", tmp_path)
+    assert C.render(["python3", "solver.py"], tmp_path) == ["python3", "solver.py"]
+
+
+def test_render_leaves_non_python_commands_alone():
+    cmd = C.render(["pdftoppm", "-r", "300", "x.pdf"], Path("/tmp/level"))
+    assert cmd == ["pdftoppm", "-r", "300", "x.pdf"]
+
+
+# --------------------------------------------------------------------------- #
 # run_solver + check_outputs end to end
 # --------------------------------------------------------------------------- #
 def test_run_solver_produces_outputs(level_dir: Path):
@@ -138,7 +160,7 @@ def _write_any_valid_level(tmp_path: Path, accept_sample: bool) -> Path:
 
 
 def test_check_any_valid_also_validates_the_sample_answer(tmp_path: Path):
-    """Phase 3's rule: an oracle that rejects a provided sample is broken."""
+    """Phase 4's rule: an oracle that rejects a provided sample is broken."""
     lvl = _write_any_valid_level(tmp_path, accept_sample=True)
     result = _run("check_outputs.py", str(lvl))
     assert result.returncode == 0, result.stdout + result.stderr

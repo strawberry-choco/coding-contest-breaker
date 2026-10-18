@@ -111,7 +111,7 @@ def check_any_valid(level_dir: Path, cfg: dict, quiet: bool) -> int:
 
     # The checker must also accept every provided sample answer — an oracle
     # that rejects a sample is broken by definition, and the real inputs have
-    # no reference to catch it (Phase 3's rule, enforced here too).
+    # no reference to catch it (Phase 4's rule, enforced here too).
     samples = _sample_pairs(level_dir, cfg)
     for inp, expected in samples:
         cmd = C.render(judge_cmd, level_dir, input_path=inp, output_path=expected)

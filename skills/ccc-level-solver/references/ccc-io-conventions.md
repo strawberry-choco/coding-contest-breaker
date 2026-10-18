@@ -100,14 +100,14 @@ you add:
   verifier/        optional provided checker/visualizer
   notes/inputs.md   your parsed-input analysis, persisted (Phase 0)
   notes/spec.md    your extracted specification (Phase 2)
-  notes/attack.md  your attack plan: structure, split, tool choice (Phase 2)
+  notes/attack.md  your attack plan: structure, split, tool choice (Phase 3)
   level.json       kind + run + judge config
   solver.py        your solver (contract: {in} -> {out})
   checker.py       oracle for exact / any_valid
   scorer.py        oracle for optimization (validate + score)
   tests/           pytest tests
   outputs/         generated answers, named after their inputs — what you upload
-  report.md        final summary (Phase 6)
+  report.md        final summary (Phase 7)
 ```
 
 Each provided file lives in exactly one place: an input in `inputs/`, a
