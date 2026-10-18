@@ -32,7 +32,10 @@ For floats, accept if `abs(a-b) <= atol` or `abs(a-b) <= rtol*max(1,abs(b))`.
 - every stated constraint holds, and
 - if a reference exists, that the answer is consistent with the input.
 
-It does **not** need to match a reference answer. Add tests with:
+It does **not** need to match a reference answer. When the statement
+supplies the target (an achievability guarantee — "the given number is the
+maximum possible"), the checker validates against it and no independent
+oracle is built by default. Add tests with:
 - the provided sample (must be valid),
 - a hand-crafted invalid answer (must be rejected),
 - a hand-crafted *different but valid* answer (must be accepted) — proves the
@@ -75,7 +78,9 @@ spots, so a wrong mental model passes its own tests. (Real case: a staggered
 grid's border test was wrong, passed ten unit tests and the structure checker,
 and was caught only by a differently formulated implementation.)
 
-After GREEN on an `exact`/`any_valid` level:
+After GREEN on an `exact` level (skipped by default on `any_valid` — the
+supplied target is ground truth; dispatch the blind oracle only after an
+undiagnosable checker rejection):
 
 1. Have a **fresh-context subagent write `oracle.py` blind** — give it the
    statement and `notes/spec.md`, withhold `solver.py`. Formulation
@@ -102,7 +107,7 @@ edge cases (size 1, maximal input, ties, ambiguous whitespace) — encode each o
 you discover **for the level you are currently solving**.
 
 Do **not** carry tests, rules, or assumptions across levels. Each level is a
-**fresh contract** (defined in `../SKILL.md`): a test pinning the previous
+**fresh contract** (defined in `shared-rules.md`): a test pinning the previous
 level's behavior may be wrong here — or assert something the new statement
 forbids. Re-derive the oracle and tests from the current statement every
 time, and expect to delete or rewrite prior tests rather than keep them

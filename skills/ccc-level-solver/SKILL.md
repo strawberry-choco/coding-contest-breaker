@@ -31,13 +31,16 @@ usually a checker or scorer, not a fixed expected string. The attack plan
 reduced, split, and matched to tools. A level ships within one session; time
 spent is part of the score — every phase works the **effort ladder**
 (cheapest rung first, banked progress) rather than opening with the most
-ambitious tool.
+ambitious tool. The cross-phase rules every brief assumes — the statement is
+authoritative, fresh contract, renders are the reference, persist,
+bank-and-emit, on paper — live in `references/shared-rules.md`; Phase 6 runs
+under the orchestrator-owned ≤ 30-minute EV checkpoints.
 
 For **output-only** levels the minimum pipeline is Phases 0→1→2→4→5→7 — build
 the checker, ship a solver whose outputs pass it on every provided input,
 package. Phase 3 supplies the construction ladder the solver needs; Phase 6 is
 optional deep-validation, reached when the checker rejects an output you cannot
-diagnose or the solver must generalise beyond the provided inputs.
+diagnose.
 
 ## Orchestration protocol
 
@@ -45,7 +48,9 @@ The orchestrator drives every phase the same way:
 
 1. **Dispatch** a general-purpose subagent with a self-contained brief: the
    level directory, the phase's steps (copied from this file — subagents are
-   stateless and cannot see this conversation), the artifacts it must
+   stateless and cannot see this conversation), a standing first
+   instruction to **read `references/shared-rules.md`** (the cross-phase
+   rules — briefs never restate them), the artifacts it must
    **read** and the artifacts it must **write**, and the return contract: a
    compact summary (verdicts, counts, sizes, paths, anomalies) — never raw
    data, never long tables.
@@ -97,11 +102,9 @@ are what make this reliable instead of guess-driven. Phase 3 records the
 construction ladder; Phase 6 is optional deep-validation (see the minimum
 pipeline above).
 
-**Every level is a fresh contract.** A CCC level builds on the previous
-level's model but adds or removes rules, so nothing carries over for free:
-re-read the statement, re-derive the oracle, re-check every assumption. The
-previous level's rules, tests, inputs, and solver are *not* a baseline to
-preserve — reusing them unchanged is more likely wrong than right.
+**Every level is a fresh contract** (shared rules): nothing carries over for
+free — re-read the statement, re-derive the oracle, re-check every
+assumption.
 
 ### Phase 0 — Gather and transform the inputs
 
@@ -132,10 +135,7 @@ byte-level quirks the files themselves show immediately.
   character or value invariants, size ranges, delimiters and whitespace
   placement (verify byte-level — e.g. blank lines between *and* after the
   header). Cross-check each claimed invariant against all files, not one.
-- **Persist everything to disk in the level folder** — throwaway analysis
-  dies with the context window, and long tables printed to a terminal
-  mangle (dropped characters): write files, read them back with the file
-  tool:
+- **Persist everything to disk in the level folder** (shared rules):
   - `notes/inputs.md` — what was parsed and what was found: per-file
     structure and stats, the invariants a parser must accept, format quirks
     with evidence, the sizes that will choose the algorithm, and the path of
@@ -149,8 +149,7 @@ byte-level quirks the files themselves show immediately.
 **Return**: the file inventory, record counts, size ranges, format quirks,
 anomalies, and the paths of everything written.
 **Orchestrator verify**: the files exist; 2-3 claims in `notes/inputs.md`
-spot-check clean against the actual inputs (one read each). Distrust
-triggers a re-dispatch with the discrepancy named.
+spot-check clean against the actual inputs (one read each).
 
 ### Phase 1 — Identify the level kind
 
@@ -170,8 +169,7 @@ statement and decide.
 1. Take the inventory: which artifacts exist (statement, `inputs/`,
    `samples/`, `verifier/` — a provided visualizer often sits under a
    platform name rather than `visualizer.html`), and what the statement's
-   rules actually say. Read the statement from the rendered pages recorded
-   in `notes/inputs.md` — do not re-render the PDF.
+   rules actually say.
 2. **Read `references/level-kinds.md`** (the full taxonomy, tell-tale
    phrases, and judging method per kind) before classifying. Then classify by
    *how an answer is judged*, never by how it is delivered: CCC is
@@ -195,8 +193,7 @@ evidence quotes the statement.
 
 **Done when `notes/spec.md` pins the contract (output format
 byte-for-byte, objective, constraints, edge cases) before any code is
-written.** (The input format was pinned in Phase 0; re-consult the recorded
-statement renders — path in `notes/inputs.md` — instead of re-rendering.)
+written.** (The input format was pinned in Phase 0.)
 
 **Brief** (subagent):
 - The model builds level over level: earlier levels' `notes/spec.md` files
@@ -212,10 +209,7 @@ statement renders — path in `notes/inputs.md` — instead of re-rendering.)
 - Note constraints and limits (sizes, value ranges, plus the statement's
   time/memory limits when given) — they choose the algorithm.
 - List edge cases (empty, size 1, all-equal, maximal, adversarial).
-- The statement and its constraints are authoritative; samples illustrate
-  them. Never generalize a rule from samples alone.
-- Write the specification into `notes/spec.md` (create it). Short and
-  concrete.
+- Write the specification into `notes/spec.md` (create it).
 **Return**: the spec's non-obvious deltas (format quirks, objective), and
 anything ambiguous enough to need an orchestrator decision.
 **Orchestrator verify**: `notes/spec.md` exists; one spec rule spot-checks
@@ -229,9 +223,7 @@ before any code is written.**
 
 **Brief** (subagent):
 - Read `notes/spec.md` and `notes/inputs.md` for the contract and the sizes;
-  re-verify against the statement every rule the plan leans on — the spec is
-  reference, the statement is authoritative. Read the statement from the
-  rendered pages recorded in `notes/inputs.md`, not by re-rendering the PDF.
+  re-verify against the statement every rule the plan leans on.
 - Derive the **complexity budget** from the largest input and record it in
   `notes/attack.md`: the operation count a rung may afford (rule of thumb:
   CPython does ~10⁷ simple ops/sec, so n ≤ 10⁵ demands O(n log n) or
@@ -275,7 +267,12 @@ before any code is written.**
     plan's job is then the cheapest per-instance construction that hits each
     supplied target, generalising (a periodic supertile or strip pattern) only
     where a large instance forces it — the supplied target is ground truth, so
-    verify the construction against it.
+    verify the construction against it. On a constructive level the fit itself
+    is **rung 1** of the ladder and lands within the first ~15 minutes; once
+    it predicts every provided key, the primary engine is
+    **reverse-engineering the generator's construction** (small exact solves
+    as specimens, boundary algebra, transplant/grow between verified grids) —
+    search is for residuals.
   - **Choose tools library-first, per sub-problem**: a CP-SAT/ILP solver
     (e.g. OR-Tools) for packing and covering, networkx for graphs,
     numpy/scipy for numerics. Name the library you will try FIRST and the
@@ -286,11 +283,7 @@ before any code is written.**
     a cheap rung counts only if it provably *hits* the supplied count
     (checker-verified, ideally closed-form) — near-misses never ship; the
     exact solver then enters at the residual rung, smallest first, not as
-    the level-wide engine. Whole-room CP-SAT is only affordable for small
-    rooms — seconds up to ~2k cells, but it can time out after minutes past
-    ~5k cells — so above that decompose into independent strips or reach for
-    a construction first, rather than spending the budget on whole-room
-    search.
+    the level-wide engine.
   - **Record the constraints and the order of attempts**: level code is
     iterative only (no recursive functions — solver, checker, scripts, any
     language; explicit stacks, queues, bitmask loops, since recursion blows
@@ -299,7 +292,9 @@ before any code is written.**
     cheapest-first as an **effort ladder**: each rung gets a wall-clock
     budget and a done-when, banks what it closes (later rungs touch only
     the residual), and expensive solvers (CP-SAT/ILP) are scalpels —
-    validation and residual rooms only, never the level-wide engine;
+    validation and residual rooms ≤ ~1k cells only, never the level-wide
+    engine; on constructive levels the ladder order is fixed — count-formula
+    fit → generator reverse-engineering → bounded search on residuals;
     benchmark numbers go into `notes/`, never the terminal.
   - **Complexity gate — pass it on paper before coding**: for every rung of
     the ladder, multiply out its planned operations at the largest input and
@@ -314,8 +309,8 @@ tools, and anything that needs an orchestrator decision.
 budget, and every ladder rung's complexity fits it — checked **on paper**:
 each rung's *stated* op count, multiplied out at the largest input (sizes
 from `notes/inputs.md`), against the *stated* budget; a rung without a
-concrete op count fails the gate (re-dispatch), and the plan is never
-validated by running code. A rung that misses the budget blocks Phase 4.
+concrete op count fails the gate (re-dispatch). A rung that misses the
+budget blocks Phase 4.
 
 ### Phase 4 — Build the oracle and tests (RED)
 
@@ -328,16 +323,11 @@ checkable definition of "acceptable" / "good" exists and is wired to tests
 - Score/profile the oracle against the provided samples *first*: it must
   accept every sample answer. If it rejects one, the oracle is wrong — fix
   the oracle, never the sample.
-- Choose the oracle per kind:
-  - `exact` → `checker.py` does normalized comparison (trailing whitespace /
-    newline, token-wise vs line-wise) and reports the first differing line.
-  - `any_valid` → `checker.py` validates structure and every stated
-    constraint. Add negative tests: deliberately malformed answers must be
-    rejected.
-  - `optimization` → `scorer.py` first *validates* the answer, then returns
-    a numeric score. Record `direction` (min/max) and a `baseline` (sample
-    score or a trivial-construction score).
-  - `interactive` → write a local interactor that speaks the protocol.
+- Choose the oracle per kind — `checker.py` (exact: normalized comparison /
+  any_valid: structure + every stated constraint, with negative tests) or
+  `scorer.py` (optimization: validate then score; record `direction` and a
+  `baseline`). The per-kind recipes, normalization levels, and test lists
+  are in `references/tdd-workflow.md`.
 - Read `notes/attack.md`: the plan's split names seam conditions to verify
   and (for series levels) a count formula that must predict every provided
   instance — pin each as a test alongside the sample checks.
@@ -370,6 +360,8 @@ green** — via the simplest thing that achieves it.
   next rung; a phase that ends with some inputs still unsolved is honest
   progress, recorded in `notes/progress.md`, never a reason to have opened
   with the expensive tool.
+- **Bank-and-emit** (shared rules): the moment an answer passes the oracle,
+  it is frozen into `outputs/`.
 - **Smoke test after every solver edit**: solve the sample and run the checker
   on it (seconds) before any longer run. It catches crashes, import errors,
   and format breaks that otherwise surface mid-pipeline minutes later.
@@ -385,23 +377,33 @@ its input.
 
 ### Phase 6 — Iterate (scale up, or optimize)
 
-**Done when the branch's gate holds** — cross-check passed (exact /
-any_valid), or improvements stalled / optimality proven (optimization) —
-with the best-known answer in `outputs/`.
+**Done when the branch's gate holds** — checker ACCEPT on every provided
+input (`any_valid`), solver–oracle cross-check passed (`exact`), or
+improvements stalled / optimality proven (`optimization`) — with the
+best-known answer in `outputs/`.
 
 The Iterator runs whenever the ladder still has open inputs. The blind-oracle
 and gate roles are optional deep-validation — dispatch them when the checker
-rejects an output you cannot diagnose, or when the solver must generalise
-beyond the provided inputs; for `any_valid` with a supplied target, a checker
-ACCEPT on every provided input already qualifies the level as solved.
+rejects an output you cannot diagnose. On `any_valid` the blind oracle and
+fuzz cross-check are skipped by default (the supplied target is ground
+truth); that budget goes into an adversarial re-read of `checker.py` against
+the statement instead.
+
+**EV checkpoints — the orchestrator owns the clock.** At least every 30
+wall-clock minutes, re-run `check_outputs.py` and count checker-ACCEPT files —
+the only currency that scores. Two consecutive checkpoints with zero new
+ACCEPTs force an approach switch, chosen from: (1) count-formula fit if not
+yet done, (2) generator reverse-engineering (specimens from small exact
+solves, boundary algebra, transplant/grow between verified grids), (3) a
+different decomposition of the stuck rooms — never a longer run of the same
+search family. Timeboxes bind approaches, not individual attempts.
 
 Three subagent roles, sequenced by the orchestrator:
 
 - **Iterator** — brief per branch:
   - `exact` / `any_valid`: check the limits; replace the baseline with an
-    efficient algorithm if needed. Verify with the checker. Keep every
-    accepted improvement reproducible: solver code + seed go in the repo.
-    Climb the attack plan's effort ladder rung by rung, respecting each
+    efficient algorithm if needed. Verify with the checker. Climb the
+    attack plan's effort ladder rung by rung, respecting each
     rung's budget: every input a rung closes is banked into `outputs/` and
     logged (closed/open) in `notes/progress.md`; when a rung overruns its
     budget, record the residual and escalate to the next rung — the last
@@ -416,26 +418,30 @@ Three subagent roles, sequenced by the orchestrator:
     meaningful number of iterations, when a time budget is hit, or when
     optimality is proven. Returns per-room/per-case status and what blocks
     the gate.
-- **Blind oracle author** — a **fresh-context subagent** whose brief carries
-  only the statement and `notes/spec.md`, never `solver.py`: it writes
+- **Blind oracle author** (`exact` by default; on `any_valid` only after an
+  undiagnosable checker rejection) — a **fresh-context subagent** whose brief
+  carries only the statement and `notes/spec.md`, never `solver.py`: it writes
   `oracle.py`. The rationale (why independence catches what self-testing
   cannot) is in `references/tdd-workflow.md`.
 - **Gate runner** — runs `python3 scripts/cross_check.py "<level_dir>"`:
   solver vs oracle over samples, real inputs, and (when `fuzz_gen.py`
   provides `generate(rng) -> str`) random small cases, printing a concrete
-  counterexample on the first failure.
+  counterexample on the first failure. For `any_valid` there is no oracle and
+  no `fuzz_gen.py` by default — the gate is `check_outputs.py` ACCEPT on every
+  provided input; write a fuzzer only when a diagnosis needs one.
 
 **The gate**: for `exact`, solver–oracle **agreement**; for `any_valid`,
 cross_check.py switches to **validity mode** — both answers must pass
 `checker.py`, since a byte-diff would flag legitimate multiple-solution
-answers as fake counterexamples. For `exact` this agreement is the gate; for
-`any_valid` it is a bonus check — the checker's ACCEPT on every provided input
-is what qualifies the level as solved.
+answers as fake counterexamples.
 
 **Return**: the gate verdict (or the stall/optimality proof), plus any
 counterexample text — relayed verbatim.
-**Orchestrator verify**: `oracle.py` exists and `cross_check.py` exited 0
-(re-run it inline — a bounded one-command check — if in doubt).
+**Orchestrator verify**: `exact` → `oracle.py` exists and `cross_check.py`
+exited 0 (re-run it inline — a bounded one-command check — if in doubt);
+`any_valid` → `check_outputs.py` reports ACCEPT on every provided input;
+`optimization` → `level.json` records the best score and `outputs/` holds the
+best-known answers.
 
 ### Phase 7 — Finalize and package submission
 
@@ -444,8 +450,8 @@ unambiguous.**
 
 **Brief** (subagent):
 - Run the full pipeline once more end-to-end: `run_solver.py` →
-  `check_outputs.py` → `cross_check.py` → tests (unfiltered, including
-  slow).
+  `check_outputs.py` → `cross_check.py` (when the level has an oracle) →
+  tests (unfiltered, including slow).
 - Ensure `outputs/` contains exactly one answer per input, correctly named.
 - Write `report.md`: level kind, approach/algorithm, score or correctness
   result, runtime, assumptions, and known risks.
@@ -489,8 +495,7 @@ level code (`solver.py`, `checker.py`, `scorer.py`, `oracle.py`, `fuzz_gen.py`)
 may import the venv's third-party packages (ortools, numpy, networkx, scipy).
 Without a venv the command falls back to the system `python3`.
 `cross_check.py` likewise re-execs itself under the venv interpreter, so
-in-process solver/oracle imports work there too. (The skill's own `scripts/`
-stay dependency-free.)
+in-process solver/oracle imports work there too.
 
 ## Helper scripts
 
@@ -515,6 +520,10 @@ as the first arg.
 
 ## References
 
+- `references/shared-rules.md` — the cross-phase rules every brief assumes
+  (the statement is authoritative, fresh contract, renders are the
+  reference, persist, bank-and-emit, on paper); every dispatched subagent
+  reads it first.
 - `references/level-kinds.md` — full taxonomy, tell-tale phrases, judging
   method per kind; composite kinds.
 - `references/ccc-io-conventions.md` — verbatim file naming, output-only

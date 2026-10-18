@@ -10,7 +10,7 @@ judged, and the formatting pitfalls that lose points.
   (You may also upload source later for bonus time, but that is not how the level
   is judged.)
 - Levels are **gated and sequential**: you cannot skip ahead. Each level is a
-  **fresh contract** (defined in `../SKILL.md`): re-derive it from its own
+  **fresh contract** (defined in `shared-rules.md`): re-derive it from its own
   statement rather than assuming the previous level's rules, tests, or solver
   still apply.
 - All languages are allowed. You produce the answer files however you like —
@@ -82,8 +82,6 @@ better than the example" rather than giving a number. The judging model
   (the initial threshold to beat).
 - Keep the best-known answer in `outputs/` at all times; never overwrite it
   with a worse one.
-- Reproducibility matters: pin any randomness (record the seed) so an
-  improvement can be regenerated.
 
 ## Workspace contract
 
