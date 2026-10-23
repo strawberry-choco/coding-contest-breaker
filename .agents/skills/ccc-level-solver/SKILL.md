@@ -27,20 +27,20 @@ the orchestrator sequences phases, verifies their outputs, and decides.
 (correctness) or how good it is (optimization). Only then write the solver,
 driven by tests derived from that oracle. In contest TDD, "the test" is
 usually a checker or scorer, not a fixed expected string. The attack plan
-(Phase 3) is written before any code — that is where the problem gets
+(Phase 1) is written before any code — that is where the problem gets
 reduced, split, and matched to tools. A level ships within one session; time
 spent is part of the score — every phase works the **effort ladder**
 (cheapest rung first, banked progress) rather than opening with the most
 ambitious tool. The cross-phase rules every brief assumes — the statement is
 authoritative, fresh contract, renders are the reference, persist,
-bank-and-emit, on paper — live in `references/shared-rules.md`; Phase 6 runs
+bank-and-emit, on paper — live in `references/shared-rules.md`; Phase 4 runs
 under the orchestrator-owned ≤ 30-minute EV checkpoints.
 
-For **output-only** levels the minimum pipeline is Phases 0→1→2→4→5→7 — build
-the checker, ship a solver whose outputs pass it on every provided input,
-package. Phase 3 supplies the construction ladder the solver needs; Phase 6 is
-optional deep-validation, reached when the checker rejects an output you cannot
-diagnose.
+For **output-only** levels the minimum pipeline is Phases 0→1→2→3→5 —
+understand the level (inputs, kind, spec in one dispatch), plan the attack,
+build the checker, ship a solver whose outputs pass it on every provided
+input, package. Phase 4 is optional deep-validation, reached when the checker
+rejects an output you cannot diagnose.
 
 ## Orchestration protocol
 
@@ -97,32 +97,35 @@ contract — everything the level dir contains once solved — is also in
 
 ## Phases
 
-Follow the phases in order. Phases 0–2 and 4–5 are the required spine — they
-are what make this reliable instead of guess-driven. Phase 3 records the
-construction ladder; Phase 6 is optional deep-validation (see the minimum
-pipeline above).
+Follow the phases in order. Phases 0–3 and 5 are the required spine — they
+are what make this reliable instead of guess-driven; Phase 4 is optional
+deep-validation (see the minimum pipeline above).
 
 **Every level is a fresh contract** (shared rules): nothing carries over for
 free — re-read the statement, re-derive the oracle, re-check every
 assumption.
 
-### Phase 0 — Gather and transform the inputs
+### Phase 0 — Understand the level (inputs, kind, spec — one dispatch)
 
-**Done when `notes/inputs.md` records every provided input file's
-structure, stats, and invariants.** Classifying (Phase 1) is only as good as
-the ground truth it reasons over: counts read off an un-normalized directory
-mislead, and parsers written from the statement's format table miss
-byte-level quirks the files themselves show immediately.
+**Done when one dispatch has turned the raw download into the working
+contract: `level.json` records a kind (including a deliberate `unknown`
+plus the evidence still missing), `notes/spec.md` pins the input grammar,
+sizes, output format byte-for-byte, objective, constraints, and edge
+cases, and `notes/parse_inputs.py` parses every provided input.** Inputs,
+kind, and spec are read off the same statement pages; separate phases
+would re-read those pages and re-pay the dispatch round trip for nothing.
 
 **Brief** (subagent):
 - Normalize the workspace first: flat download → `scaffold_level.py
   --import` (see Inputs). Provided names stay verbatim, moving into
-  `inputs/` and `samples/`.
-- Read the statement once for the **input format**. Statements are often
-  image slides: run `pdftotext` for copyable text, then **render every page
-  and read them visually regardless** — pdftotext garbles or interleaves
-  slide layouts, and a model built on silently-garbled text is the expensive
-  failure. Use
+  `inputs/` and `samples/`. The scaffold also writes `notes/inventory.md`
+  (mechanical per-file facts: bytes, lines, tokens, first/last lines) and
+  seeds `notes/parse_inputs.py` — read the inventory, never recompute it.
+- Read the statement for **input format, output format, objective, and
+  kind** in one pass. Statements are often image slides: run `pdftotext`
+  for copyable text, then **render the rule-bearing pages and read them
+  visually regardless** — pdftotext garbles or interleaves slide layouts,
+  and a model built on silently-garbled text is the expensive failure. Use
   `python3 .agents/skills/ccc-level-solver/scripts/render_statement.py "<pdf>"`
   (renders all pages at 300 dpi into /tmp — never into the level dir). When
   table characters stay too small to read reliably, re-render that region
@@ -131,99 +134,69 @@ byte-level quirks the files themselves show immediately.
   tables from the image character by character; never pair columns by
   position in the `pdftotext -layout` output. Render long PDFs in batches
   (`--pages 1-8`).
-- Parse and study **every** provided input: block/record counts, shapes,
-  character or value invariants, size ranges, delimiters and whitespace
-  placement (verify byte-level — e.g. blank lines between *and* after the
-  header). Cross-check each claimed invariant against all files, not one.
-- **Persist everything to disk in the level folder** (shared rules):
-  - `notes/inputs.md` — what was parsed and what was found: per-file
-    structure and stats, the invariants a parser must accept, format quirks
-    with evidence, the sizes that will choose the algorithm, and the path of
-    the rendered statement pages (default `/tmp/<pdf-stem>-render`) plus any
-    crops worth re-reading — later phases read those images instead of
-    re-rendering the PDF.
-  - for non-trivial formats, keep the working parser as
-    `notes/parse_inputs.py`; later phases adapt it instead of re-deriving it
-    (a blind oracle still writes its own — it must inherit no assumptions).
+- Parse **every** provided input with the tolerant tokenizer in
+  `notes/parse_inputs.py` (scaffolded from `templates/parse_inputs.py.tmpl`;
+  adapt the per-level `parse()`). The platform's own loader sanitizes
+  whitespace, so the parser is token/line based and byte-level forensics
+  are unnecessary: a parse failure is the detector, and only quirks that
+  actually break parsing get recorded. Record per-file record counts,
+  value ranges, and the sizes that will choose the algorithm.
+- **Classify the kind by how an answer is judged**, never by how it is
+  delivered: CCC is always output-only while the kind varies per level.
+  Read `references/level-kinds.md` (the full taxonomy, tell-tale phrases,
+  and judging method per kind) before classifying. Choose from: `exact`
+  (one correct answer, compared to a reference), `any_valid` (many valid
+  answers; a checker validates format + constraints), `optimization`
+  (scored; "better" wins), `interactive` (converses with a judge — usually
+  unsupported here), `unknown` (not enough information; gather more before
+  proceeding). **This is a judgement, so an agent makes it, not a script.**
+  A keyword scan is not a verdict: the classifying words live in narrative
+  prose as often as in the rules, and a script cannot tell the difference
+  (level 4's only "better" is the email pleasantry *"we expect better
+  results than your predecessor"*, which a keyword scan reads as a scoring
+  directive). An input-supplied optimum is **not** `optimization`: when the
+  statement says the given number *is the maximum possible*, that is an
+  achievability guarantee for a constructive (`any_valid`) level, not a
+  score to beat. Likewise a provided sample answer does not make a level
+  `exact` — every kind ships one. Record the decision in `level.json`
+  (schema below).
+- Write `notes/spec.md` — the single contract document (create it):
+  the verified input grammar with per-file record counts and value ranges,
+  the sizes that will choose the algorithm, the output format byte-for-byte
+  (line count, ordering, rounding, `YES`/`NO`), the objective (for
+  `optimization`, what is minimized/maximized and how it is measured; for
+  `any_valid`, the constraints a valid answer must satisfy), constraints
+  and limits (including the statement's time/memory limits when given),
+  edge cases (empty, size 1, all-equal, maximal, adversarial), the path of
+  the rendered statement pages (default `/tmp/<pdf-stem>-render`) plus any
+  crops worth re-reading — later phases read those images instead of
+  re-rendering the PDF — and anything ambiguous enough to need an
+  orchestrator decision. Series levels build on each other: earlier
+  levels' `notes/spec.md` files document the shared conventions (grid
+  geometry, I/O format, character semantics) — read them as reference,
+  then re-verify every rule against this level's statement and samples
+  (reference for the model, never a code baseline).
+- Note in the spec which artifacts exist (statement, `inputs/`,
+  `samples/`, `verifier/` — a provided visualizer often sits under a
+  platform name rather than `visualizer.html`).
 
-**Return**: the file inventory, record counts, size ranges, format quirks,
-anomalies, and the paths of everything written.
-**Orchestrator verify**: the files exist; 2-3 claims in `notes/inputs.md`
-spot-check clean against the actual inputs (one read each).
+**Return**: the kind with 2-3 lines of statement evidence, the grammar,
+sizes, format quirks, ambiguities, and the paths of everything written.
+**Orchestrator verify**: `level.json` parses and names a known kind whose
+evidence quotes the statement; `notes/spec.md` and `notes/parse_inputs.py`
+exist; 2-3 spec claims spot-check clean against the actual inputs and
+statement (one read each).
 
-### Phase 1 — Identify the level kind
-
-**Done when `level.json` records a kind** — including a deliberate
-`unknown` plus the evidence still missing. Everything downstream depends on
-this; with the inputs parsed (Phase 0), it is inference from evidence, not
-keyword guessing.
-
-**This is a judgement, so an agent makes it, not a script.** A keyword scan is
-not a verdict: the classifying words live in narrative prose as often as in the
-rules, and a script cannot tell the difference. Real examples — level 4's only
-"better" is the email pleasantry *"we expect better results than your
-predecessor"*, which a keyword scan reads as a scoring directive. Read the
-statement and decide.
-
-**Brief** (subagent):
-1. Take the inventory: which artifacts exist (statement, `inputs/`,
-   `samples/`, `verifier/` — a provided visualizer often sits under a
-   platform name rather than `visualizer.html`), and what the statement's
-   rules actually say.
-2. **Read `references/level-kinds.md`** (the full taxonomy, tell-tale
-   phrases, and judging method per kind) before classifying. Then classify by
-   *how an answer is judged*, never by how it is delivered: CCC is
-   always output-only while the kind varies per level. Choose from: `exact`
-   (one correct answer, compared to a reference), `any_valid` (many valid
-   answers; a checker validates format + constraints), `optimization` (scored;
-   "better" wins), `interactive` (converses with a judge — usually unsupported
-   here), `unknown` (not enough information; gather more before proceeding).
-3. An input-supplied optimum is **not** `optimization`: when the statement says
-   the given number *is the maximum possible*, that is an achievability
-   guarantee for a constructive (`any_valid`) level, not a score to beat.
-   Likewise a provided sample answer does not make a level `exact` — every kind
-   ships one.
-4. Record the decision in `level.json` (schema below).
-
-**Return**: the kind and 2-3 lines of evidence from the statement.
-**Orchestrator verify**: `level.json` parses and names a known kind; the
-evidence quotes the statement.
-
-### Phase 2 — Recon and specification
-
-**Done when `notes/spec.md` pins the contract (output format
-byte-for-byte, objective, constraints, edge cases) before any code is
-written.** (The input format was pinned in Phase 0.)
-
-**Brief** (subagent):
-- The model builds level over level: earlier levels' `notes/spec.md` files
-  document the shared conventions (grid geometry, I/O format, character
-  semantics). Read them as reference, then re-verify every rule against this
-  level's statement and samples — reference for the model, never a code
-  baseline.
-- State the output format byte-for-byte (line count, ordering, rounding,
-  `YES`/`NO`).
-- Extract the objective: for `optimization`, what is minimized/maximized and
-  how is it measured? For `any_valid`, what constraints must a valid answer
-  satisfy?
-- Note constraints and limits (sizes, value ranges, plus the statement's
-  time/memory limits when given) — they choose the algorithm.
-- List edge cases (empty, size 1, all-equal, maximal, adversarial).
-- Write the specification into `notes/spec.md` (create it).
-**Return**: the spec's non-obvious deltas (format quirks, objective), and
-anything ambiguous enough to need an orchestrator decision.
-**Orchestrator verify**: `notes/spec.md` exists; one spec rule spot-checks
-clean against the statement.
-
-### Phase 3 — Attack plan
+### Phase 1 — Attack plan
 
 **Done when `notes/attack.md` records the attack plan — complexity budget
 derived from the largest input, every ladder rung gated against it on paper —
 before any code is written.**
 
 **Brief** (subagent):
-- Read `notes/spec.md` and `notes/inputs.md` for the contract and the sizes;
-  re-verify against the statement every rule the plan leans on.
+- Read `notes/spec.md` for the contract and the sizes (`notes/inventory.md`
+  holds the mechanical per-file facts); re-verify against the statement
+  every rule the plan leans on.
 - Derive the **complexity budget** from the largest input and record it in
   `notes/attack.md`: the operation count a rung may afford (rule of thumb:
   CPython does ~10⁷ simple ops/sec, so n ≤ 10⁵ demands O(n log n) or
@@ -235,7 +208,11 @@ before any code is written.**
   closed-form fits, and a *small exact probe* (DP or tiny ILP on small
   instances) run to **discover** a construction, both O(instances)/seconds. If
   a rung's cost cannot be established by arithmetic, the plan says so and the
-  rung's Phase 6 budget discovers it empirically.
+  rung's Phase 4 budget discovers it empirically — by **downsized
+  extrapolation, never a full-size run**: generate synthetic inputs at small
+  fractions of the real n (e.g. n/100 and n/50), time them, check the growth
+  ratio against the claimed complexity, and extrapolate to the real n against
+  the budget.
 - **Write the attack plan into `notes/attack.md` — the reduce-then-split
   work, on paper, before coding starts:**
   - **Reduce**: translate the statement into the problem's exact structure
@@ -277,7 +254,7 @@ before any code is written.**
     (e.g. OR-Tools) for packing and covering, networkx for graphs,
     numpy/scipy for numerics. Name the library you will try FIRST and the
     input sizes it must handle; hand-roll only what no library provides, and
-    only after a rung's Phase 6 run has measured the library too slow for
+    only after a rung's Phase 4 run has measured the library too slow for
     those sizes. When
     the judge demands exact attainment (`any_valid` with a supplied maximum),
     a cheap rung counts only if it provably *hits* the supplied count
@@ -308,11 +285,11 @@ tools, and anything that needs an orchestrator decision.
 **Orchestrator verify**: `notes/attack.md` exists, states the complexity
 budget, and every ladder rung's complexity fits it — checked **on paper**:
 each rung's *stated* op count, multiplied out at the largest input (sizes
-from `notes/inputs.md`), against the *stated* budget; a rung without a
+from `notes/spec.md`), against the *stated* budget; a rung without a
 concrete op count fails the gate (re-dispatch). A rung that misses the
-budget blocks Phase 4.
+budget blocks Phase 2.
 
-### Phase 4 — Build the oracle and tests (RED)
+### Phase 2 — Build the oracle and tests (RED)
 
 **Done when `tests/test_level.py` runs red** — failing because no solver
 exists yet, not because the oracle rejects a provided sample. A machine-
@@ -328,6 +305,10 @@ checkable definition of "acceptable" / "good" exists and is wired to tests
   `scorer.py` (optimization: validate then score; record `direction` and a
   `baseline`). The per-kind recipes, normalization levels, and test lists
   are in `references/tdd-workflow.md`.
+- When the statement's rules underdetermine the oracle — a provided
+  visualizer/checker implements subtler behavior than the slides state —
+  extract the ground truth from the provided verifier's source first and
+  record it in `notes/spec.md`.
 - Read `notes/attack.md`: the plan's split names seam conditions to verify
   and (for series levels) a count formula that must predict every provided
   instance — pin each as a test alongside the sample checks.
@@ -346,7 +327,7 @@ sample-check verdict.
 **Orchestrator verify**: the test file and the oracle exist; the returned
 failures name the missing solver, not sample rejections.
 
-### Phase 5 — Implement a baseline solver (GREEN)
+### Phase 3 — Implement a baseline solver (GREEN)
 
 **Done when every output in `outputs/` passes the oracle and the tests are
 green** — via the simplest thing that achieves it.
@@ -360,6 +341,11 @@ green** — via the simplest thing that achieves it.
   next rung; a phase that ends with some inputs still unsolved is honest
   progress, recorded in `notes/progress.md`, never a reason to have opened
   with the expensive tool.
+- **Hold the implementation to the plan, not just to the samples**: solver
+  code accumulates conjectures the plan never wrote down (a greedy ordering,
+  a pruning rule, a pattern assumption) — verify each on small brute-forced
+  instances before it becomes load-bearing, and establish a rung's real cost
+  by downsized extrapolation (Phase 1), never a full-size run to find out.
 - **Bank-and-emit** (shared rules): the moment an answer passes the oracle,
   it is frozen into `outputs/`.
 - **Smoke test after every solver edit**: solve the sample and run the checker
@@ -375,7 +361,7 @@ green** — via the simplest thing that achieves it.
 **Orchestrator verify**: `outputs/` holds one answer per input, named after
 its input.
 
-### Phase 6 — Iterate (scale up, or optimize)
+### Phase 4 — Iterate (scale up, or optimize)
 
 **Done when the branch's gate holds** — `check_outputs.py` ACCEPT on every
 provided input plus a green test suite (`any_valid`, and `exact` by
@@ -453,7 +439,7 @@ inline — a bounded one-command check — if in doubt); `optimization` →
 `level.json` records the best score and `outputs/` holds the best-known
 answers.
 
-### Phase 7 — Finalize and package submission
+### Phase 5 — Finalize and package submission
 
 **Done when the pipeline passes on a clean state and the upload list is
 unambiguous.**
@@ -474,13 +460,14 @@ the orchestrator relays the upload list to the human verbatim.
 
 ## level.json
 
-Created in Phase 1 and updated as you learn. Missing keys fall back to
+Created in Phase 0 and updated as you learn. Missing keys fall back to
 defaults.
 
 ```json
 {
   "kind": "exact | any_valid | optimization | interactive | unknown",
   "run": ["python3", "solver.py", "{in}", "{out}"],
+  "timeout": 120,
   "inputs": "inputs",
   "outputs": "outputs",
   "samples": "samples",
@@ -496,7 +483,10 @@ defaults.
 ```
 
 Placeholders: `{in}` input path, `{out}` output path, `{expected}` matching
-sample answer (when it exists), `{level}` the level directory.
+sample answer (when it exists), `{level}` the level directory. The per-input
+`timeout` (seconds, default 120, `--timeout` overrides) bounds every solver
+run: a rung that overruns its budget is killed, reported as a timeout, and
+leaves banked outputs untouched.
 
 A bare `python3` (or `python`) as the command's interpreter is executed under
 the repo's `.venv/bin/python` when that exists — the helper scripts resolve it
@@ -517,16 +507,19 @@ as the first arg.
 
 | Script | Purpose |
 | --- | --- |
-| `scripts/scaffold_level.py` | Normalize a raw download into a level dir (moves the provided files into `inputs/` and `samples/`); scaffold `level.json`, `tests/`, `solver.py`. |
+| `scripts/scaffold_level.py` | Normalize a raw download into a level dir (moves the provided files into `inputs/` and `samples/`); scaffold `level.json`, `tests/`, `solver.py`; write `notes/inventory.md`. |
 | `scripts/run_solver.py` | Run the solver over every input in `inputs/` → `outputs/`. |
 | `scripts/check_outputs.py` | Dispatch on `kind`: compare (exact), validate (any_valid), or score (optimization). |
-| `scripts/cross_check.py` | Phase 6 gate: solver vs independently written `oracle.py` (+ optional `fuzz_gen.py`); prints a counterexample on the first failure. |
+| `scripts/cross_check.py` | Phase 4 gate: solver vs independently written `oracle.py` (+ optional `fuzz_gen.py`); prints a counterexample on the first failure. |
 | `scripts/render_statement.py` | Render statement PDF pages to /tmp at 300 dpi for visual reading; `--crop` re-renders a region at native pixels. |
 
 ## Templates
 
-`solver.py.tmpl`, `checker.py.tmpl`, `scorer.py.tmpl`, `test_level.py.tmpl`
-— copy the relevant ones into the level directory and fill them in.
+`templates/` holds `solver.py.tmpl`, `checker.py.tmpl`, `scorer.py.tmpl`,
+`test_level.py.tmpl`, and `parse_inputs.py.tmpl`. The scaffold copies
+`solver.py`, `tests/test_level.py`, and `notes/parse_inputs.py` (plus
+`checker.py` / `scorer.py` when the kind calls for them); fill the copies
+in per level.
 
 ## References
 

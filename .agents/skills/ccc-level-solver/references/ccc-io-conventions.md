@@ -96,16 +96,18 @@ you add:
   inputs/          provided input files, names kept verbatim (in_X.txt / X.in)
   samples/         provided worked-example pairs (in_X + out_X, or X.in + X.out)
   verifier/        optional provided checker/visualizer
-  notes/inputs.md   your parsed-input analysis, persisted (Phase 0)
-  notes/spec.md    your extracted specification (Phase 2)
-  notes/attack.md  your attack plan: structure, split, tool choice (Phase 3)
+  notes/inventory.md     mechanical per-file facts (written by scaffold_level.py)
+  notes/parse_inputs.py  your tolerant input parser (Phase 0)
+  notes/spec.md          the level contract: grammar, sizes, output format,
+                         objective, constraints, edge cases (Phase 0)
+  notes/attack.md        your attack plan: structure, split, tool choice (Phase 1)
   level.json       kind + run + judge config
   solver.py        your solver (contract: {in} -> {out})
   checker.py       oracle for exact / any_valid
   scorer.py        oracle for optimization (validate + score)
   tests/           pytest tests
   outputs/         generated answers, named after their inputs — what you upload
-  report.md        final summary (Phase 7)
+  report.md        final summary (Phase 5)
 ```
 
 Each provided file lives in exactly one place: an input in `inputs/`, a

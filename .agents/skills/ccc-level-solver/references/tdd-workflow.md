@@ -67,7 +67,7 @@ the solver as a subprocess over pipes. This is both oracle and test harness.
 - **GREEN:** implement the simplest correct solver (`templates/solver.py.tmpl`).
   Iterate `run_solver.py` → `check_outputs.py` → `pytest` until green.
 - **REFACTOR / SCALE:** replace the baseline with an efficient algorithm; keep
-  the tests green. For optimization, wrap the loop from Phase 6 and re-run the
+  the tests green. For optimization, wrap the loop from Phase 4 and re-run the
   scorer after every accepted improvement.
 
 ## Independent verification (the blind oracle)

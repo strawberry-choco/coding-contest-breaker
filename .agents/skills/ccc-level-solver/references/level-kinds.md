@@ -1,7 +1,7 @@
 # Level kinds — taxonomy and classification
 
 How a level is *judged* determines how you must solve and verify it. This file
-is the reference for **Phase 1**. The taxonomy is drawn from how mainstream
+is the reference for **Phase 0**. The taxonomy is drawn from how mainstream
 online judges structure problems (classic/exact, special judge, output-only,
 interactive, communication, grader/function) and how scored/optimization
 contests (marathons, Optil.io-style) judge answers.
@@ -14,7 +14,7 @@ Do not conflate these:
    - `program` — the judge runs your source code on hidden inputs (classic IOI/ICPC style).
    - `output_only` — you upload answer *files* and no program runs (Codeforces
      output-only, CCC). **CCC is always `output_only`.**
-2. **Kind** — *how* an answer is judged. This is what Phase 1 classifies.
+2. **Kind** — *how* an answer is judged. This is what Phase 0 classifies.
 
 CCC levels are `output_only` in delivery, but their kind varies per level. Classify
 by kind.

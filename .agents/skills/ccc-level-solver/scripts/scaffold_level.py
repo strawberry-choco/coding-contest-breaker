@@ -6,7 +6,9 @@ Usage:
                               [--force]
 
 Creates the standard workspace (inputs/, samples/, outputs/, tests/, notes/),
-writes a starter level.json, and copies solver/test templates if absent.
+writes a starter level.json, copies solver/test templates if absent, seeds
+notes/parse_inputs.py, and writes notes/inventory.md (mechanical per-file
+facts over the provided inputs).
 
 With --import, a flat downloaded folder is normalized: an input file that has a
 sibling answer file becomes a sample pair (moved to samples/); everything else
@@ -72,6 +74,53 @@ def ensure_structure(level_dir: Path) -> list[str]:
             d.mkdir(parents=True, exist_ok=True)
             created.append(sub + "/")
     return created
+
+
+def _clip(s: str, width: int = 72) -> str:
+    s = s.replace("|", "\\|").replace("\n", " ")
+    return s if len(s) <= width else s[: width - 3] + "..."
+
+
+def write_inventory(level_dir: Path) -> Path | None:
+    """Mechanical per-file facts over inputs/ and samples/ -> notes/inventory.md.
+
+    Purely derived data (bytes, lines, tokens, first/last line); regenerated on
+    every run so it never drifts from the files. The Understand phase interprets
+    this table instead of recomputing it.
+    """
+    rows = []
+    for sub in ("inputs", "samples"):
+        d = level_dir / sub
+        if not d.is_dir():
+            continue
+        for p in sorted(d.iterdir()):
+            if not p.is_file() or p.name.startswith("."):
+                continue
+            raw = p.read_bytes()
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                rows.append((sub, p.name, str(len(raw)), "-", "-", "(binary)", "(binary)"))
+                continue
+            content = [ln for ln in text.splitlines() if ln.strip()]
+            first = _clip(content[0]) if content else "(empty)"
+            last = _clip(content[-1]) if content else "(empty)"
+            rows.append((sub, p.name, str(len(raw)), str(len(content)),
+                         str(len(text.split())), first, last))
+    if not rows:
+        return None
+    out = level_dir / "notes" / "inventory.md"
+    lines = [
+        "# Provided-input inventory (mechanical, written by scaffold_level.py)",
+        "",
+        "Regenerated on every scaffold run; interpret this table, never recompute it.",
+        "",
+        "| dir | file | bytes | lines | tokens | first line | last line |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    lines += ["| " + " | ".join(r) + " |" for r in rows]
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out
 
 
 def starter_level_json(kind: str) -> dict:
@@ -189,6 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     copies = [
         (TEMPLATES / "solver.py.tmpl", level_dir / "solver.py"),
         (TEMPLATES / "test_level.py.tmpl", level_dir / "tests" / "test_level.py"),
+        (TEMPLATES / "parse_inputs.py.tmpl", level_dir / "notes" / "parse_inputs.py"),
     ]
     if args.kind in ("any_valid", "optimization"):
         copies.append((TEMPLATES / "checker.py.tmpl", level_dir / "checker.py"))
@@ -199,8 +249,13 @@ def main(argv: list[str] | None = None) -> int:
         if src_t.exists() and _maybe_copy(src_t, dst, args.force):
             print(f"scaffolded {dst.relative_to(level_dir)}")
 
-    print("\nnext: study the parsed inputs and persist findings to notes/inputs.md "
-          "(Phase 0), then identify the kind (Phase 1).")
+    inv = write_inventory(level_dir)
+    if inv is not None:
+        print(f"wrote {inv.relative_to(level_dir)}")
+
+    print("\nnext: understand the level in one dispatch — read the statement and "
+          "notes/inventory.md, adapt notes/parse_inputs.py, write notes/spec.md, "
+          "record the kind in level.json (Phase 0).")
     return 0
 
 

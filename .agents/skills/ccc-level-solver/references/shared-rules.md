@@ -14,7 +14,7 @@ word (bolded below).
   rather than keep earlier tests. Reusing them unchanged is more likely
   wrong than right.
 - **Renders are the reference.** Read the statement from the rendered pages
-  recorded in `notes/inputs.md`; never re-render the PDF.
+  recorded in `notes/spec.md`; never re-render the PDF.
 - **Persist.** Throwaway analysis dies with the context window: write files
   into the level dir and read them back with the file tool — long tables
   printed to a terminal mangle (dropped characters).
@@ -23,6 +23,11 @@ word (bolded below).
   is frozen into `outputs/` (a per-key bank the solver emits verbatim is
   fine); build no generality, determinism, or regeneration machinery beyond
   what the provided inputs need.
+- **Contest code.** Time is the score, so effort goes into correct output
+  files, fast. Spend nothing on what the judge cannot see (docstrings,
+  comments, elegance, defensive checks, extensibility), and never trade away
+  what the pipeline leans on (the run contract, determinism, iterative-only
+  code, the oracle gates, code you can still debug at minute 50).
 - **On paper.** Plan-level cost claims are settled by arithmetic on stated
   operation counts at the largest input — never by running prototype code.
   Data checks over the provided instances (closed-form fits, small exact

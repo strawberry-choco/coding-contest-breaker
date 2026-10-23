@@ -9,17 +9,13 @@
   answer files; the skill never talks to the contest platform.
 - **Scope.** Solving a single CCC level locally, for all judging kinds, Classic
   and School tracks; the Data/AI track is out of scope.
-- **Solve a level** by following `.agents/skills/ccc-level-solver/SKILL.md` phase by
-  phase — that file owns the phase list, helper scripts, and templates; nothing
-  else restates them. When the `/ccc-level-solver` command is not registered
-  with the host's Skill tool, read SKILL.md and execute the phases manually.
 - **Level workspaces** live under `contests/<contest>/<level>/` (for example
   `contests/school-honeycomb/level-2/`). Each level directory is a
   self-contained workspace; provided level files are authoritative (names kept
   verbatim), and the directory contract is documented in
   `.agents/skills/ccc-level-solver/references/ccc-io-conventions.md`.
 - **`examples/level1/`** is the worked example (a trivial `exact` level) and
-  the fixture the repo's own script tests run against — do not mutate it.
+the fixture the repo's own script tests run against — do not mutate it.
 - Third-party packages live only in the uv venv: run dev tools via
-  `uv run pytest -q` (or `.venv/bin/python`). Level code may import them; how
-  `level.json` commands resolve the venv interpreter is documented in SKILL.md.
+`uv run pytest -q` (or `.venv/bin/python`). Level code may import them; how
+`level.json` commands resolve the venv interpreter is documented in SKILL.md.

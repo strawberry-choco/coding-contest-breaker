@@ -313,3 +313,78 @@ def test_scaffold_import_orphan_answer_is_skipped(tmp_path: Path):
     assert "skipped out_level-2_0.txt" in result.stdout
     assert not (dst / "inputs" / "out_level-2_0.txt").exists()
     assert (dst / "inputs" / "in_level-2_1.txt").exists()
+
+
+def test_scaffold_writes_inventory_and_parser_seed(tmp_path: Path):
+    """Phase 0's mechanical half: the scaffold computes, the agent interprets."""
+    src = tmp_path / "download"
+    src.mkdir()
+    (src / "level2_1.in").write_text("3\n1 2\n3 4\n5 6\n", encoding="utf-8")
+    dst = tmp_path / "level2i"
+
+    result = _run("scaffold_level.py", str(dst), "--import", str(src))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    body = (dst / "notes" / "inventory.md").read_text(encoding="utf-8")
+    assert "| inputs | level2_1.in | 14 | 4 | 7 | 3 | 5 6 |" in body
+    assert "Regenerated on every scaffold run" in body
+    assert (dst / "notes" / "parse_inputs.py").exists()
+
+    # idempotent: a second run regenerates the inventory, not duplicates it
+    again = _run("scaffold_level.py", str(dst), "--import", str(src))
+    assert again.returncode == 0, again.stdout + again.stderr
+    body2 = (dst / "notes" / "inventory.md").read_text(encoding="utf-8")
+    assert body2 == body
+
+
+# --------------------------------------------------------------------------- #
+# run_solver timeout — a hung rung dies at the budget, banked outputs survive
+# --------------------------------------------------------------------------- #
+def _write_sleeping_level(tmp_path: Path) -> Path:
+    lvl = tmp_path / "lvl"
+    (lvl / "inputs").mkdir(parents=True)
+    (lvl / "inputs" / "a.in").write_text("1\n", encoding="utf-8")
+    (lvl / "solver.py").write_text(
+        "import sys, time\ntime.sleep(30)\n", encoding="utf-8")
+    (lvl / "level.json").write_text(json.dumps({
+        "kind": "exact",
+        "run": ["python3", "solver.py", "{in}", "{out}"],
+    }), encoding="utf-8")
+    return lvl
+
+
+def test_run_solver_timeout_kills_a_hung_solver(tmp_path: Path):
+    lvl = _write_sleeping_level(tmp_path)
+    result = _run("run_solver.py", str(lvl), "--timeout", "0.5")
+    assert result.returncode == 1
+    assert "timeout" in result.stdout
+    assert not (lvl / "outputs" / "a.out").exists()
+    assert not [p for p in (lvl / "outputs").iterdir()
+                if p.name.startswith(".tmp-")]
+
+
+def test_run_solver_timeout_keeps_the_banked_output(tmp_path: Path):
+    """A failed re-run must not touch what a previous run already banked."""
+    lvl = _write_sleeping_level(tmp_path)
+    (lvl / "outputs").mkdir()
+    (lvl / "outputs" / "a.out").write_text("banked\n", encoding="utf-8")
+    result = _run("run_solver.py", str(lvl), "--timeout", "0.5")
+    assert result.returncode == 1
+    assert (lvl / "outputs" / "a.out").read_text(encoding="utf-8") == "banked\n"
+
+
+def test_run_solver_level_json_timeout_applies(tmp_path: Path):
+    lvl = _write_sleeping_level(tmp_path)
+    cfg = json.loads((lvl / "level.json").read_text(encoding="utf-8"))
+    cfg["timeout"] = 0.5
+    (lvl / "level.json").write_text(json.dumps(cfg), encoding="utf-8")
+    result = _run("run_solver.py", str(lvl))
+    assert result.returncode == 1
+    assert "timeout" in result.stdout
+
+
+def test_run_solver_leaves_no_temp_files(level_dir: Path):
+    result = _run("run_solver.py", str(level_dir))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not [p for p in (level_dir / "outputs").iterdir()
+                if p.name.startswith(".tmp-")]

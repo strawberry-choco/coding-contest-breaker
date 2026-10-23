@@ -15,6 +15,7 @@ from pathlib import Path
 DEFAULTS: dict = {
     "kind": "unknown",
     "run": ["python3", "solver.py", "{in}", "{out}"],
+    "timeout": 120,
     "inputs": "inputs",
     "outputs": "outputs",
     "samples": "samples",

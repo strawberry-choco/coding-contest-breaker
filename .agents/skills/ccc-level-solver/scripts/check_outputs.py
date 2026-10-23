@@ -9,7 +9,7 @@ Dispatch on ``kind``:
   any_valid    run judge.command (a checker) on each (input, output) pair
   optimization run judge.scorer on each output; report scores and best-known
   interactive  not supported here (use the level's interactor directly)
-  unknown      cannot check; record the kind in level.json first (Phase 1)
+  unknown      cannot check; record the kind in level.json first (Phase 0)
 """
 from __future__ import annotations
 
@@ -111,7 +111,7 @@ def check_any_valid(level_dir: Path, cfg: dict, quiet: bool) -> int:
 
     # The checker must also accept every provided sample answer — an oracle
     # that rejects a sample is broken by definition, and the real inputs have
-    # no reference to catch it (Phase 4's rule, enforced here too).
+    # no reference to catch it (Phase 2's rule, enforced here too).
     samples = _sample_pairs(level_dir, cfg)
     for inp, expected in samples:
         cmd = C.render(judge_cmd, level_dir, input_path=inp, output_path=expected)
@@ -217,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
               "check_outputs.py does not handle it")
         return 2
     print(f"unknown level kind (kind={kind!r}); record it in level.json "
-          f"(Phase 1 of SKILL.md)")
+          f"(Phase 0 of SKILL.md)")
     return 3
 
 

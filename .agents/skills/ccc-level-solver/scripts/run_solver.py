@@ -4,7 +4,9 @@
 Usage:
     python3 run_solver.py <level_dir> [--only NAME] [--timeout SECONDS] [--quiet]
 
-Reads level.json for the run command (default: python3 solver.py {in} {out}).
+Reads level.json for the run command (default: python3 solver.py {in} {out})
+and the per-input timeout in seconds (level.json "timeout" key, default 120;
+--timeout overrides).
 For each file in inputs/, runs the command with cwd = level_dir and writes the
 answer to outputs/ under the provided naming: in_X.<ext> -> out_X.<ext>,
 otherwise X.in -> X.out. Prints per-file status and a summary, and
@@ -31,6 +33,7 @@ def main(argv: list[str] | None = None) -> int:
 
     level_dir = C.as_level_dir(args.level_dir)
     cfg = C.load_level(level_dir)
+    timeout = args.timeout if args.timeout is not None else cfg.get("timeout")
 
     inputs = C.iter_inputs(level_dir, cfg)
     if args.only:
@@ -44,21 +47,24 @@ def main(argv: list[str] | None = None) -> int:
     total_time = 0.0
     for inp in inputs:
         out = C.output_path_for(level_dir, cfg, inp)
-        cmd = C.render(cfg["run"], level_dir, input_path=inp, output_path=out)
+        tmp = out.with_name(f".tmp-{out.name}")
+        cmd = C.render(cfg["run"], level_dir, input_path=inp, output_path=tmp)
         start = time.perf_counter()
-        rc, stdout, stderr = C.run_command(cmd, cwd=level_dir, timeout=args.timeout)
+        rc, stdout, stderr = C.run_command(cmd, cwd=level_dir, timeout=timeout)
         elapsed = time.perf_counter() - start
         total_time += elapsed
 
-        made = out.exists()
-        status = "ok" if (rc == 0 and made) else "FAIL"
-        if status == "ok" and not args.quiet:
-            print(f"  [{status}] {inp.name} -> {out.name}  ({elapsed:.3f}s)")
-        elif status != "ok":
+        if rc == 0 and tmp.exists():
+            tmp.replace(out)
+            if not args.quiet:
+                print(f"  [ok] {inp.name} -> {out.name}  ({elapsed:.3f}s)")
+        else:
             failures += 1
+            tmp.unlink(missing_ok=True)
             detail = stderr.strip().splitlines()[-1] if stderr.strip() else ""
-            print(f"  [{status}] {inp.name}  rc={rc}  "
-                  f"{'no output written; ' if not made else ''}{detail}")
+            print(f"  [FAIL] {inp.name}  {'timeout' if rc == 124 else f'rc={rc}'}  "
+                  f"{'kept previous output; ' if out.exists() else 'no output written; '}"
+                  f"{detail}")
 
     print(f"\n{len(inputs) - failures}/{len(inputs)} ok in {total_time:.3f}s "
           f"(outputs in {level_dir / cfg['outputs']})")
